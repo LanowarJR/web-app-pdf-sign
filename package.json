@@ -1,0 +1,6 @@
+{
+  "dependencies": {
+    "firebase-admin": "^13.4.0",
+    "formidable": "^3.5.4"
+  }
+}

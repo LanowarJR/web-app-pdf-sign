@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Documentos</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh; /* Garante que o body ocupa a altura total */
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
+        }
+        #documentsContainer {
+            display: flex;
+            flex-wrap: wrap; /* Permite que os cartões quebrem para a próxima linha */
+            gap: 20px; /* Espaço entre os cartões */
+            justify-content: center; /* Centraliza os cartões */
+            max-width: 1200px;
+            margin: 0 auto; /* Centraliza o container */
+            flex-grow: 1; /* Permite que o container cresça para ocupar espaço disponível */
+        }
+        .document-card {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 20px;
+            width: 100%; /* Largura padrão para mobile */
+            max-width: 350px; /* Largura máxima para desktop */
+            box-sizing: border-box; /* Inclui padding e border na largura */
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .document-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.12);
+        }
+        .document-card h3 {
+            color: #34495e;
+            margin-top: 0;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            line-height: 1.4;
+            word-wrap: break-word; /* Quebra palavras longas */
+        }
+        .document-card p {
+            margin: 8px 0;
+            line-height: 1.6;
+            font-size: 0.95em;
+        }
+        .document-card strong {
+            color: #555;
+        }
+        .document-card a {
+            display: inline-block;
+            margin-top: 15px;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            text-align: center;
+            transition: background-color 0.3s ease;
+        }
+        .document-card a:hover {
+            background-color: #0056b3;
+        }
+        .no-documents, .error-message {
+            text-align: center;
+            padding: 40px;
+            border-radius: 8px;
+            margin: 50px auto;
+            max-width: 600px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            font-size: 1.1em;
+            color: #666;
+        }
+        .error-message {
+            color: #d9534f;
+            border: 1px solid #d9534f;
+            background-color: #fdf7f7;
+        }
+
+        /* Media Queries para Responsividade */
+        @media (min-width: 768px) { /* Para tablets e desktops */
+            .document-card {
+                width: calc(50% - 10px); /* Dois cartões por linha, com 20px de gap */
+            }
+        }
+
+        @media (min-width: 1024px) { /* Para desktops maiores */
+            .document-card {
+                width: calc(33.33% - 13.33px); /* Três cartões por linha */
+            }
+        }
+    </style>
+</head>
+<body>
+    <h1>Meus Documentos Carregados</h1>
+    <div id="documentsContainer">
+        <p>Carregando documentos...</p>
+    </div>
+
+    <script>
+        async function fetchDocuments() {
+            const documentsContainerDiv = document.getElementById('documentsContainer');
+            documentsContainerDiv.innerHTML = '<p>Carregando documentos...</p>'; // Feedback inicial
+
+            try {
+                const response = await fetch('/api/get-documents');
+                if (!response.ok) {
+                    throw new Error(`Erro HTTP: ${response.status} - ${response.statusText}`);
+                }
+                const documents = await response.json();
+
+                if (documents.length === 0) {
+                    documentsContainerDiv.innerHTML = '<p class="no-documents">Nenhum documento encontrado.</p>';
+                    return;
+                }
+
+                documentsContainerDiv.innerHTML = ''; // Limpa o "Carregando..."
+                documents.forEach(doc => {
+                    const div = document.createElement('div');
+                    div.className = 'document-card';
+
+                    // Formata a data para algo mais legível
+                    const uploadDate = doc.data_upload && doc.data_upload._seconds
+                        ? new Date(doc.data_upload._seconds * 1000).toLocaleString('pt-BR', {
+                            year: 'numeric',
+                            month: 'long',
+                            day: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })
+                        : 'Data indisponível';
+
+                    div.innerHTML = `
+                        <h3>${doc.nome_arquivo_original || 'Nome do Arquivo Desconhecido'}</h3>
+                        <p><strong>CPF Associado:</strong> ${doc.cpf_associado || 'Não informado'}</p>
+                        <p><strong>Status:</strong> <span style="font-weight: bold; color: ${doc.status === 'assinado' ? '#28a745' : '#ffc107'};">${doc.status || 'N/A'}</span></p>
+                        <p><strong>Upload em:</strong> ${uploadDate}</p>
+                        ${doc.url_original ? `<a href="${doc.url_original}" target="_blank">Baixar Documento</a>` : '<p>URL de download indisponível</p>'}
+                        <p style="font-size: 0.8em; color: #888; margin-top: 10px;">ID: ${doc.id}</p>
+                    `;
+                    documentsContainerDiv.appendChild(div);
+                });
+
+            } catch (error) {
+                console.error('Erro ao buscar documentos:', error);
+                documentsContainerDiv.innerHTML = `<p class="error-message">Erro ao carregar documentos: ${error.message}. Por favor, tente novamente.</p>`;
+            }
+        }
+
+        // Chama a função ao carregar a página
+        fetchDocuments();
+    </script>
+</body>
+</html>

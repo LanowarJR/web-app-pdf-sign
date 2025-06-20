@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login | Assinador de PDF</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f2f5;
+            color: #333;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            justify-content: center;
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 2.2em;
+        }
+        .login-card {
+            background-color: #ffffff;
+            border: 1px solid #e0e0e0;
+            border-radius: 10px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            padding: 30px;
+            width: 100%;
+            max-width: 400px;
+            box-sizing: border-box;
+            /* O login-card já é um flex container para seus filhos diretos (loginForm, registerForm, message) */
+            display: flex; /* Adicionado para garantir que os formulários internos se comportem como itens flex */
+            flex-direction: column; /* Organiza os itens (forms, message) em coluna */
+            gap: 20px; /* Espaço entre os formulários e a mensagem */
+        }
+        /* ESTILO NOVO/AJUSTADO PARA OS FORMS INTERNOS */
+        #loginForm, #registerForm {
+            display: flex; /* Torna o form um flex container */
+            flex-direction: column; /* Organiza os elementos internos em coluna */
+            gap: 15px; /* Espaçamento entre os grupos de formulário */
+        }
+
+        .form-group {
+            margin-bottom: 0; /* Remover margin-bottom aqui se o gap estiver cuidando */
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="email"],
+        input[type="password"],
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+            font-size: 1em;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.1em;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        .google-btn {
+            background-color: #db4437; /* Cor do Google */
+        }
+        .google-btn:hover {
+            background-color: #c0392b;
+        }
+        .separator {
+            text-align: center;
+            margin: 20px 0;
+            position: relative;
+        }
+        .separator::before, .separator::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            width: 40%;
+            height: 1px;
+            background: #e0e0e0;
+        }
+        .separator::before { left: 0; }
+        .separator::after { right: 0; }
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            text-align: center;
+            display: none; /* Escondido por padrão */
+        }
+        .message.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .message.info {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        /* Responsividade */
+        @media (max-width: 600px) {
+            body { padding: 15px; }
+            .login-card { padding: 20px; box-shadow: none; border: none; border-radius: 0; }
+            h1 { font-size: 1.8em; }
+        }
+    </style>
+</head>
+<body>
+    <h1>Entrar no Assinador de PDF</h1>
+
+    <div class="login-card">
+        <div id="loginForm">
+            <div class="form-group">
+                <label for="email">E-mail:</label>
+                <input type="email" id="email" placeholder="seuemail@exemplo.com">
+            </div>
+            <div class="form-group">
+                <label for="password">Senha:</label>
+                <input type="password" id="password" placeholder="Sua senha">
+            </div>
+            <button id="loginEmailBtn">Entrar com E-mail e Senha</button>
+            <p style="text-align: center; margin-top: 10px;">Ainda não tem conta? <a href="#" id="showRegister">Cadastre-se aqui</a></p>
+
+            <div class="separator">OU</div>
+
+            <button id="loginGoogleBtn" class="google-btn">Entrar com Google</button>
+        </div>
+
+        <div id="registerForm" style="display: none;">
+            <h2>Criar Nova Conta</h2>
+            <div class="form-group">
+                <label for="regEmail">E-mail:</label>
+                <input type="email" id="regEmail" placeholder="seuemail@exemplo.com">
+            </div>
+            <div class="form-group">
+                <label for="regPassword">Senha:</label>
+                <input type="password" id="regPassword" placeholder="Crie uma senha (mín. 6 caracteres)">
+            </div>
+            <div class="form-group">
+                <label for="regCpf">CPF:</label>
+                <input type="text" id="regCpf" placeholder="Digite seu CPF (apenas números)" maxlength="11">
+            </div>
+            <button id="registerEmailBtn">Cadastrar e Entrar</button>
+            <p style="text-align: center; margin-top: 10px;">Já tem conta? <a href="#" id="showLogin">Entrar aqui</a></p>
+        </div>
+
+        <div id="message" class="message"></div>
+    </div>
+
+    <script>
+        // Configuração do Firebase (substitua com suas próprias chaves)
+        // ESTAS CHAVES SÃO PÚBLICAS E SEGURAS PARA FICAR NO FRONTEND
+        const firebaseConfig = {
+            apiKey: "AIzaSyBqegu97Mwh4WzC4YzLvUa5e6Glfw9YP8U",
+            authDomain: "assinarpdfdocs.firebaseapp.com",
+            projectId: "assinarpdfdocs",
+            storageBucket: "assinarpdfdocs.firebasestorage.app", // Ou .firebasestorage.app
+            messagingSenderId: "162230729039",
+            appId: "1:162230729039:web:1348cdd2eabbeb38b2ad3a"
+        };
+
+        // Inicializa o Firebase
+        firebase.initializeApp(firebaseConfig);
+
+        // Obtém as instâncias dos serviços
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        // Referências aos elementos HTML
+        const loginForm = document.getElementById('loginForm');
+        const registerForm = document.getElementById('registerForm');
+        const showRegisterBtn = document.getElementById('showRegister');
+        const showLoginBtn = document.getElementById('showLogin');
+        const messageDiv = document.getElementById('message');
+
+        const emailInput = document.getElementById('email');
+        const passwordInput = document.getElementById('password');
+        const loginEmailBtn = document.getElementById('loginEmailBtn');
+        const loginGoogleBtn = document.getElementById('loginGoogleBtn');
+
+        const regEmailInput = document.getElementById('regEmail');
+        const regPasswordInput = document.getElementById('regPassword');
+        const regCpfInput = document.getElementById('regCpf');
+        const registerEmailBtn = document.getElementById('registerEmailBtn');
+
+        // Funções Auxiliares
+        function showMessage(msg, type = 'info') {
+            messageDiv.textContent = msg;
+            messageDiv.className = `message ${type}`;
+            messageDiv.style.display = 'block';
+        }
+
+        function hideMessage() {
+            messageDiv.style.display = 'none';
+        }
+
+        function redirectToDashboard() {
+            // Redireciona para a página de documentos listados
+            window.location.href = '/list.html'; // Ou outra página que você criar para a dashboard
+        }
+
+        // --- Lógica de Comutação de Formulário ---
+        showRegisterBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            loginForm.style.display = 'none';
+            registerForm.style.display = 'flex'; // Já é flex-direction: column por CSS
+            hideMessage();
+        });
+
+        showLoginBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            registerForm.style.display = 'none';
+            loginForm.style.display = 'flex'; // Já é flex-direction: column por CSS
+            hideMessage();
+        });
+
+        // --- Lógica de Login/Registro ---
+
+        // Login com E-mail e Senha
+        loginEmailBtn.addEventListener('click', async () => {
+            const email = emailInput.value;
+            const password = passwordInput.value;
+            hideMessage();
+
+            try {
+                await auth.signInWithEmailAndPassword(email, password);
+                showMessage('Login bem-sucedido! Redirecionando...', 'success');
+                redirectToDashboard(); // Redireciona após login
+            } catch (error) {
+                showMessage(`Erro ao fazer login: ${error.message}`, 'error');
+                console.error('Erro de login:', error);
+            }
+        });
+
+        // Registro com E-mail e Senha (e CPF)
+        registerEmailBtn.addEventListener('click', async () => {
+            const email = regEmailInput.value;
+            const password = regPasswordInput.value;
+            const cpf = regCpfInput.value;
+            hideMessage();
+
+            if (!cpf || cpf.length !== 11 || !/^\d+$/.test(cpf)) {
+                showMessage('Por favor, digite um CPF válido (apenas 11 números).', 'error');
+                return;
+            }
+
+            try {
+                const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+                const user = userCredential.user;
+
+                // Salva o CPF no Firestore usando o UID do usuário como ID do documento
+                await db.collection('users').doc(user.uid).set({
+                    email: user.email,
+                    cpf: cpf,
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+                });
+
+                showMessage('Conta criada e CPF salvo! Redirecionando...', 'success');
+                redirectToDashboard(); // Redireciona após registro
+            } catch (error) {
+                showMessage(`Erro ao criar conta: ${error.message}`, 'error');
+                console.error('Erro de registro:', error);
+            }
+        });
+
+        // Login com Google
+        loginGoogleBtn.addEventListener('click', async () => {
+            hideMessage();
+            const provider = new firebase.auth.GoogleAuthProvider();
+
+            try {
+                const result = await auth.signInWithPopup(provider);
+                const user = result.user;
+
+                // Verifica se o usuário já tem um perfil no Firestore (com CPF)
+                const userDoc = await db.collection('users').doc(user.uid).get();
+
+                if (!userDoc.exists) {
+                    // Se for o primeiro login com Google, pede o CPF
+                    const cpf = prompt('Por favor, digite seu CPF (apenas números) para continuar:');
+                    if (!cpf || cpf.length !== 11 || !/^\d+$/.test(cpf)) {
+                        showMessage('CPF inválido. Por favor, tente novamente.', 'error');
+                        await auth.signOut(); // Desloga o usuário se o CPF for inválido
+                        return;
+                    }
+
+                    await db.collection('users').doc(user.uid).set({
+                        email: user.email,
+                        cpf: cpf,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        provider: 'google'
+                    });
+                    showMessage('Login com Google bem-sucedido e CPF salvo! Redirecionando...', 'success');
+                } else {
+                    showMessage('Login com Google bem-sucedido! Redirecionando...', 'success');
+                }
+                redirectToDashboard(); // Redireciona após login
+            } catch (error) {
+                showMessage(`Erro ao fazer login com Google: ${error.message}`, 'error');
+                console.error('Erro de login com Google:', error);
+            }
+        });
+
+        // Opcional: Verificar estado de autenticação ao carregar a página
+        auth.onAuthStateChanged(user => {
+            if (user) {
+                // Usuário já logado, redireciona para a dashboard
+                console.log('Usuário já logado:', user.uid);
+                // redirectToDashboard(); // Comentei para permitir testar a tela de login
+            } else {
+                console.log('Nenhum usuário logado.');
+            }
+        });
+
+    </script>
+</body>
+</html>
