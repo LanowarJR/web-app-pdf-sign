@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Assinar Documento | Assinador de PDF</title>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
+    
+    <style>
+        body { 
+            font-family: sans-serif; 
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f7f6;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 15px;
+        }
+        #document-name-display {
+            font-size: 1.1em;
+            color: #555;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #pdf-viewer-container {
+            border: 1px solid #ccc;
+            width: 90%; /* Ajuste para melhor visualização em telas maiores */
+            max-width: 1000px; /* Limite a largura máxima */
+            height: 70vh; /* Ocupa 70% da altura da viewport */
+            overflow: auto; /* Permite scroll se o PDF for grande */
+            background-color: #fff;
+            display: flex;
+            justify-content: flex-start; 
+            align-items: flex-start; /* Alinha o PDF no topo */
+            position: relative; /* Para posicionar o overlay */
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        canvas#pdf-canvas {
+            border: 0px solid black; 
+            display: block; 
+        }
+        #signature-overlay {
+            position: absolute;
+            border: 2px dashed blue;
+            background-color: rgba(0, 0, 255, 0.1); 
+            cursor: crosshair;
+            display: none; 
+            overflow: hidden; 
+            box-sizing: border-box; 
+        }
+        #signature-overlay img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain; 
+        }
+        #signature-controls {
+            margin-top: 25px;
+            text-align: center;
+            display: flex;
+            flex-wrap: wrap; 
+            justify-content: center;
+            gap: 15px; 
+        }
+        #signature-controls button {
+            padding: 12px 25px;
+            font-size: 1em;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #positionSignatureBtn {
+            background-color: #007bff;
+            color: white;
+        }
+        #positionSignatureBtn:hover:not(:disabled) {
+            background-color: #0056b3;
+        }
+        #drawSignatureBtn {
+            background-color: #28a745;
+            color: white;
+        }
+        #drawSignatureBtn:hover:not(:disabled) {
+            background-color: #218838;
+        }
+        #signDocumentBtn {
+            background-color: #ffc107;
+            color: #333;
+        }
+        #signDocumentBtn:hover:not(:disabled) {
+            background-color: #e0a800;
+        }
+        #backToListBtn {
+            background-color: #6c757d;
+            color: white;
+        }
+        #backToListBtn:hover:not(:disabled) {
+            background-color: #5a6268;
+        }
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        /* Estilos para o Modal de Assinatura */
+        #signature-modal {
+            display: none; 
+            position: fixed; 
+            z-index: 1000; 
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.7); 
+            justify-content: center;
+            align-items: center;
+        }
+
+        #signature-modal-content {
+            background-color: #fefefe;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            width: 90%; 
+            max-width: 500px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            animation-name: animatetop;
+            animation-duration: 0.4s;
+        }
+
+        @keyframes animatetop {
+            from {top: -300px; opacity: 0}
+            to {top: 0; opacity: 1}
+        }
+
+        canvas#signature-pad {
+            border: 1px solid #000;
+            background-color: #fff;
+            cursor: crosshair;
+            margin-bottom: 15px;
+            width: 100%; 
+            height: 150px; 
+        }
+        #signature-modal-content div button {
+            padding: 10px 20px;
+            margin: 0 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        #clearSignatureBtn {
+            background-color: #dc3545;
+            color: white;
+        }
+        #clearSignatureBtn:hover {
+            background-color: #c82333;
+        }
+        #confirmSignatureBtn {
+            background-color: #007bff;
+            color: white;
+        }
+        #confirmSignatureBtn:hover {
+            background-color: #0056b3;
+        }
+
+        /* Estilos para o Loading Spinner */
+        #loading-spinner {
+            display: none; 
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 20px;
+            border-radius: 10px;
+            z-index: 9999;
+            flex-direction: column; 
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2em;
+            box-shadow: 0 0 15px rgba(255,255,255,0.5);
+        }
+        #loading-spinner::after {
+            content: '';
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-top: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <h1>Assinar Documento</h1>
+    <p id="document-name-display">Carregando documento...</p>
+
+    <div id="pdf-viewer-container">
+        <canvas id="pdf-canvas"></canvas>
+        <div id="signature-overlay"></div>
+    </div>
+
+    <div id="signature-controls">
+        <button id="positionSignatureBtn">1. Posicionar Assinatura no PDF (Arrastar)</button>
+        <button id="drawSignatureBtn" disabled>2. Desenhar Assinatura</button>
+        <button id="signDocumentBtn" disabled>3. Assinar Documento Agora</button>
+        <button id="backToListBtn">Voltar para Meus Documentos</button>
+    </div>
+
+    <div id="signature-modal">
+        <div id="signature-modal-content">
+            <h2>Desenhe sua Assinatura</h2>
+            <canvas id="signature-pad" width="400" height="150"></canvas>
+            <div>
+                <button id="clearSignatureBtn">Limpar</button>
+                <button id="confirmSignatureBtn">Confirmar Assinatura</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading-spinner">
+        Processando assinatura...
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js"></script>
+
+    <script>
+        // Configuração do Firebase (COLOQUE SUAS PRÓPRIAS CHAVES AQUI!)
+        const firebaseConfig = {
+            apiKey: "AIzaSyBqegu97Mwh4WzC4YzLvUa5e6Glfw9YP8U",
+            authDomain: "assinarpdfdocs.firebaseapp.com",
+            projectId: "assinarpdfdocs",
+            storageBucket: "assinarpdfdocs.firebasestorage.app", // Ou .firebasestorage.app
+            messagingSenderId: "162230729039",
+            appId: "1:162230729039:web:1348cdd2eabbeb38b2ad3a"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+
+        const pdfCanvas = document.getElementById('pdf-canvas');
+        const canvasContext = pdfCanvas.getContext('2d');
+        const pdfViewerContainer = document.getElementById('pdf-viewer-container');
+        const signatureOverlay = document.getElementById('signature-overlay');
+
+        const positionSignatureBtn = document.getElementById('positionSignatureBtn');
+        const drawSignatureBtn = document.getElementById('drawSignatureBtn');
+        const signDocumentBtn = document.getElementById('signDocumentBtn');
+        const backToListBtn = document.getElementById('backToListBtn');
+        const documentNameDisplay = document.getElementById('document-name-display');
+
+        const signatureModal = document.getElementById('signature-modal');
+        const signaturePad = document.getElementById('signature-pad');
+        const signaturePadContext = signaturePad.getContext('2d');
+        const clearSignatureBtn = document.getElementById('clearSignatureBtn');
+        const confirmSignatureBtn = document.getElementById('confirmSignatureBtn');
+        const loadingSpinner = document.getElementById('loading-spinner');
+
+        let pdfDoc = null;
+        let currentPage = 1;
+        let currentDocumentId = null;
+        let documentOriginalUrl = null;
+        // signaturePosition agora armazena as coordenadas *absolutas no PDF* (incluindo scroll)
+        let signaturePosition = null; // { x, y, pageNum, width, height }
+        let signatureImageData = null; 
+
+        let isDrawingPad = false; 
+        let lastXPad = 0;
+        let lastYPad = 0;
+
+        let isSelectingArea = false;
+        // Estas são as coordenadas INICIAIS do arrasto, relativas à área VISÍVEL do container
+        let startXVisible = 0; 
+        let startYVisible = 0;
+
+        backToListBtn.addEventListener('click', () => {
+            window.location.href = '/list.html';
+        });
+
+        auth.onAuthStateChanged(async (user) => {
+            if (!user) {
+                console.log('Usuário não logado, redirecionando para login.html');
+                window.location.href = '/login.html';
+                return;
+            }
+
+            const urlParams = new URLSearchParams(window.location.search);
+            currentDocumentId = urlParams.get('id');
+
+            if (!currentDocumentId) {
+                alert('Nenhum ID de documento especificado na URL.');
+                window.location.href = '/list.html';
+                return;
+            }
+
+            try {
+                const docRef = db.collection('documents').doc(currentDocumentId);
+                const docSnap = await docRef.get();
+
+                if (!docSnap.exists) {
+                    alert('Documento não encontrado.');
+                    window.location.href = '/list.html';
+                    return;
+                }
+
+                const docData = docSnap.data();
+                documentOriginalUrl = docData.url_original; 
+                documentNameDisplay.textContent = `Documento: ${docData.nome_arquivo_original}`;
+
+                if (!documentOriginalUrl) {
+                    alert('URL do documento PDF não encontrada ou é inválida.');
+                    console.error('URL do documento original vazia ou inválida:', documentOriginalUrl);
+                    window.location.href = '/list.html';
+                    return;
+                }
+
+                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+                
+                const loadingTask = pdfjsLib.getDocument(documentOriginalUrl);
+                pdfDoc = await loadingTask.promise;
+                console.log('PDF carregado com sucesso!', pdfDoc);
+
+                renderPage(currentPage);
+
+            } catch (error) {
+                console.error('Erro ao carregar ou buscar documento:', error);
+                alert('Erro ao carregar o documento. Verifique o console para mais detalhes. (URL Original: ' + documentOriginalUrl + ')');
+                documentNameDisplay.textContent = 'Erro ao carregar documento.';
+            }
+        });
+
+        async function renderPage(pageNum) {
+            if (!pdfDoc) return;
+
+            currentPage = pageNum;
+            const page = await pdfDoc.getPage(pageNum);
+            const viewport = page.getViewport({ scale: 1.5 }); 
+
+            pdfCanvas.height = viewport.height;
+            pdfCanvas.width = viewport.width;
+
+            const renderContext = {
+                canvasContext: canvasContext,
+                viewport: viewport
+            };
+            await page.render(renderContext).promise;
+            console.log(`Página ${pageNum} renderizada. Canvas Dimensions: ${pdfCanvas.width}x${pdfCanvas.height}px`);
+            console.log(`PDF Page Viewport Dimensions (at scale 1.5): Width=${viewport.width.toFixed(2)}pt, Height=${viewport.height.toFixed(2)}pt`);
+            
+            // Reajusta a posição do overlay da assinatura se já houver uma definida
+            if (signaturePosition && signaturePosition.pageNum === currentPage) {
+                // Ao renderizar, precisamos subtrair o scroll do container para exibir na posição visível correta
+                const overlayXVisual = signaturePosition.x - pdfViewerContainer.scrollLeft;
+                const overlayYVisual = signaturePosition.y - pdfViewerContainer.scrollTop;
+                updateSignatureOverlayVisual(overlayXVisual, overlayYVisual, signaturePosition.width, signaturePosition.height);
+
+                if (signatureImageData) {
+                    signatureOverlay.innerHTML = ''; 
+                    const img = document.createElement('img');
+                    img.src = signatureImageData;
+                    signatureOverlay.appendChild(img);
+                }
+            } else {
+                signatureOverlay.style.display = 'none'; 
+                signatureOverlay.innerHTML = '';
+            }
+        }
+
+        positionSignatureBtn.addEventListener('click', () => {
+            isSelectingArea = !isSelectingArea; 
+            if (isSelectingArea) {
+                positionSignatureBtn.textContent = 'Arraste no PDF para definir a área (Modo Ativo)';
+                pdfViewerContainer.style.cursor = 'crosshair';
+                
+                pdfViewerContainer.addEventListener('mousedown', startSelection);
+                pdfViewerContainer.addEventListener('touchstart', startSelection, { passive: false });
+                
+                signatureOverlay.innerHTML = '';
+                signatureOverlay.style.display = 'none';
+                signaturePosition = null; 
+
+                alert('Modo de posicionamento ativo! Arraste o mouse/dedo sobre o PDF para definir a área da assinatura.');
+            } else {
+                positionSignatureBtn.textContent = '1. Posicionar Assinatura no PDF (Arrastar)';
+                pdfViewerContainer.style.cursor = 'default';
+                
+                pdfViewerContainer.removeEventListener('mousedown', startSelection);
+                pdfViewerContainer.removeEventListener('mousemove', resizeSelection);
+                pdfViewerContainer.removeEventListener('mouseup', endSelection);
+                pdfViewerContainer.removeEventListener('touchstart', startSelection);
+                pdfViewerContainer.removeEventListener('touchmove', resizeSelection);
+                pdfViewerContainer.removeEventListener('touchend', endSelection);
+                
+                if (!signaturePosition) { 
+                    signatureOverlay.style.display = 'none';
+                    signatureOverlay.innerHTML = '';
+                }
+            }
+        });
+
+        // Retorna as coordenadas do mouse/toque relativas à área VISÍVEL do pdfViewerContainer
+        function getRelativeCoordinates(event) {
+            const rect = pdfViewerContainer.getBoundingClientRect(); 
+            
+            let clientX, clientY;
+
+            if (event.touches && event.touches.length > 0) { 
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else { 
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+
+            const x = clientX - rect.left;
+            const y = clientY - rect.top;
+
+            console.log(`getRelativeCoordinates: clientX=${clientX.toFixed(2)}, clientY=${clientY.toFixed(2)}`);
+            console.log(`getRelativeCoordinates: rect.left=${rect.left.toFixed(2)}, rect.top=${rect.top.toFixed(2)}`);
+            console.log(`getRelativeCoordinates: Calculated x=${x.toFixed(2)}, y=${y.toFixed(2)} (relative to container's visible area)`);
+            console.log(`getRelativeCoordinates: pdfViewerContainer.scrollLeft=${pdfViewerContainer.scrollLeft}, pdfViewerContainer.scrollTop=${pdfViewerContainer.scrollTop}`);
+
+            return { x, y };
+        }
+
+        function startSelection(event) {
+            if (!isSelectingArea) return;
+            event.preventDefault(); 
+
+            isDrawingPad = true; 
+
+            const coords = getRelativeCoordinates(event);
+            startXVisible = coords.x;
+            startYVisible = coords.y;
+
+            // Define a posição inicial do overlay (um ponto zero na área visível)
+            updateSignatureOverlayVisual(startXVisible, startYVisible, 0, 0);
+            signatureOverlay.style.display = 'block';
+
+            pdfViewerContainer.addEventListener('mousemove', resizeSelection);
+            pdfViewerContainer.addEventListener('mouseup', endSelection);
+            pdfViewerContainer.addEventListener('touchmove', resizeSelection, { passive: false });
+            pdfViewerContainer.addEventListener('touchend', endSelection);
+
+            console.log('--- Início da Seleção (startSelection) ---');
+            console.log(`pdfViewerContainer boundingClientRect: top=${pdfViewerContainer.getBoundingClientRect().top.toFixed(2)}, left=${pdfViewerContainer.getBoundingClientRect().left.toFixed(2)}, width=${pdfViewerContainer.getBoundingClientRect().width.toFixed(2)}, height=${pdfViewerContainer.getBoundingClientRect().height.toFixed(2)}`);
+            console.log(`Event clientX=${event.clientX.toFixed(2)}, clientY=${event.clientY.toFixed(2)}`);
+            console.log(`Calculated startXVisible=${startXVisible.toFixed(2)}, startYVisible=${startYVisible.toFixed(2)} (relative to container's visible top-left)`);
+            console.log('signatureOverlay initial style (visual):', signatureOverlay.style.left, signatureOverlay.style.top);
+        }
+
+        function resizeSelection(event) {
+            if (!isDrawingPad) return; 
+
+            event.preventDefault(); 
+
+            const coords = getRelativeCoordinates(event);
+            let currentXVisible = coords.x;
+            let currentYVisible = coords.y;
+
+            // Garante que o retângulo seja desenhado corretamente, independentemente da direção do arrasto
+            const overlayXVisual = Math.min(startXVisible, currentXVisible);
+            const overlayYVisual = Math.min(startYVisible, currentYVisible);
+            const overlayWidth = Math.abs(currentXVisible - startXVisible);
+            const overlayHeight = Math.abs(currentYVisible - startYVisible);
+
+            updateSignatureOverlayVisual(overlayXVisual, overlayYVisual, overlayWidth, overlayHeight);
+
+            console.log('--- Durante a Seleção (resizeSelection) ---');
+            console.log(`Current Mouse Coords (relative to container visible): x=${currentXVisible.toFixed(2)}, y=${currentYVisible.toFixed(2)}`);
+            console.log(`Overlay Position & Size (visual): x=${overlayXVisual.toFixed(2)}, y=${overlayYVisual.toFixed(2)}, w=${overlayWidth.toFixed(2)}, h=${overlayHeight.toFixed(2)}`);
+            console.log('signatureOverlay style (visual update):', signatureOverlay.style.left, signatureOverlay.style.top, signatureOverlay.style.width, signatureOverlay.style.height);
+        }
+
+        function endSelection(event) {
+            if (!isDrawingPad) return;
+
+            isDrawingPad = false; 
+
+            pdfViewerContainer.removeEventListener('mousemove', resizeSelection);
+            pdfViewerContainer.removeEventListener('mouseup', endSelection);
+            pdfViewerContainer.removeEventListener('touchmove', resizeSelection);
+            pdfViewerContainer.removeEventListener('touchend', endSelection);
+
+            const coords = getRelativeCoordinates(event);
+            let endXVisible = coords.x;
+            let endYVisible = coords.y;
+
+            // Calcula as dimensões finais e a posição real (canto superior esquerdo) na área VISÍVEL
+            const finalXVisible = Math.min(startXVisible, endXVisible);
+            const finalYVisible = Math.min(startYVisible, endYVisible);
+            const finalWidth = Math.abs(endXVisible - startXVisible);
+            const finalHeight = Math.abs(endYVisible - startYVisible);
+
+            console.log('--- Fim da Seleção (endSelection) ---');
+            console.log(`End Mouse Coords (relative to container visible): x=${endXVisible.toFixed(2)}, y=${endYVisible.toFixed(2)}`);
+            console.log(`Final Calculated Position & Size (visual): x=${finalXVisible.toFixed(2)}, y=${finalYVisible.toFixed(2)}, w=${finalWidth.toFixed(2)}, h=${finalHeight.toFixed(2)}`);
+
+            // Se o usuário apenas clicou ou arrastou muito pouco, defina um tamanho mínimo
+            if (finalWidth < 20 || finalHeight < 20) { 
+                alert('Área de assinatura muito pequena. Por favor, arraste para criar uma área maior.');
+                signatureOverlay.style.display = 'none'; 
+                signatureOverlay.innerHTML = '';
+                signaturePosition = null; 
+                drawSignatureBtn.disabled = true;
+                signDocumentBtn.disabled = true;
+                positionSignatureBtn.textContent = '1. Posicionar Assinatura no PDF (Arrastar)';
+                isSelectingArea = false; 
+                return;
+            }
+
+            // AQUI É A MUDANÇA PRINCIPAL:
+            // Salva as coordenadas relativas ao INÍCIO do conteúdo do PDF (compensando o scroll)
+            signaturePosition = {
+                x: finalXVisible + pdfViewerContainer.scrollLeft, // Adiciona o scroll horizontal
+                y: finalYVisible + pdfViewerContainer.scrollTop,  // Adiciona o scroll vertical
+                pageNum: currentPage,
+                width: finalWidth,
+                height: finalHeight
+            };
+
+            console.log('Posição da assinatura definida (signaturePosition objeto, enviado ao backend):', signaturePosition);
+            
+            // Atualiza a visualização do overlay (que já leva em conta o scroll automaticamente com position:absolute)
+            updateSignatureOverlayVisual(finalXVisible, finalYVisible, finalWidth, finalHeight); 
+
+            drawSignatureBtn.disabled = false; 
+            isSelectingArea = false; 
+            positionSignatureBtn.textContent = '1. Posição da Assinatura Definida!';
+            pdfViewerContainer.style.cursor = 'default';
+        }
+
+        // Esta função define a posição visual do overlay, relativa ao canto superior ESQUERDO DA ÁREA VISÍVEL do container
+        function updateSignatureOverlayVisual(x, y, width, height) {
+            signatureOverlay.style.left = `${x}px`;
+            signatureOverlay.style.top = `${y}px`;
+            signatureOverlay.style.width = `${width}px`;
+            signatureOverlay.style.height = `${height}px`;
+            signatureOverlay.style.display = 'block'; 
+            console.log(`Overlay visual updated to: left=${x.toFixed(2)}px, top=${y.toFixed(2)}px, width=${width.toFixed(2)}px, height=${height.toFixed(2)}px`);
+        }
+
+        // --- Lógica para Desenhar Assinatura (mantida do código anterior) ---
+        drawSignatureBtn.addEventListener('click', () => {
+            signatureModal.style.display = 'flex'; 
+            clearSignaturePad(); 
+            signDocumentBtn.disabled = true; 
+        });
+
+        clearSignatureBtn.addEventListener('click', () => {
+            clearSignaturePad();
+        });
+
+        confirmSignatureBtn.addEventListener('click', () => {
+            if (signaturePadContext.getImageData(0, 0, signaturePad.width, signaturePad.height).data.every(pixel => pixel === 0)) {
+                alert('Por favor, desenhe sua assinatura no espaço fornecido.');
+                return;
+            }
+            signatureImageData = signaturePad.toDataURL('image/png');
+            console.log('Assinatura desenhada (Base64 parcial):', signatureImageData.substring(0, 50) + '...'); 
+            signatureModal.style.display = 'none'; 
+            signDocumentBtn.disabled = false; 
+            drawSignatureBtn.textContent = '2. Assinatura Desenhada!'; 
+
+            if (signaturePosition && signatureImageData) {
+                signatureOverlay.innerHTML = ''; 
+                const img = document.createElement('img');
+                img.src = signatureImageData;
+                signatureOverlay.appendChild(img);
+            }
+        });
+
+        signaturePad.addEventListener('mousedown', e => {
+            isDrawingPad = true;
+            [lastXPad, lastYPad] = [e.offsetX, e.offsetY];
+        });
+
+        signaturePad.addEventListener('mousemove', drawPad);
+        signaturePad.addEventListener('mouseup', () => isDrawingPad = false);
+        signaturePad.addEventListener('mouseout', () => isDrawingPad = false);
+
+        signaturePad.addEventListener('touchstart', e => {
+            e.preventDefault(); 
+            isDrawingPad = true;
+            const touch = e.touches[0];
+            const rect = signaturePad.getBoundingClientRect();
+            [lastXPad, lastYPad] = [touch.clientX - rect.left, touch.clientY - rect.top];
+        });
+
+        signaturePad.addEventListener('touchmove', e => {
+            e.preventDefault(); 
+            drawPad(e.touches[0]);
+        });
+
+        signaturePad.addEventListener('touchend', () => isDrawingPad = false);
+        signaturePad.addEventListener('touchcancel', () => isDrawingPad = false);
+
+        function drawPad(e) {
+            if (!isDrawingPad) return;
+            signaturePadContext.beginPath();
+            signaturePadContext.moveTo(lastXPad, lastYPad);
+            let currentX, currentY;
+            if (e.clientX && e.clientY) { 
+                currentX = e.offsetX;
+                currentY = e.offsetY;
+            } else if (e.touches && e.touches[0]) { 
+                const rect = signaturePad.getBoundingClientRect();
+                currentX = e.touches[0].clientX - rect.left;
+                currentY = e.touches[0].clientY - rect.top;
+            } else {
+                return;
+            }
+            signaturePadContext.lineTo(currentX, currentY);
+            signaturePadContext.strokeStyle = '#000';
+            signaturePadContext.lineWidth = 2;
+            signaturePadContext.lineCap = 'round';
+            signaturePadContext.stroke();
+            [lastXPad, lastYPad] = [currentX, currentY];
+        }
+
+        function clearSignaturePad() {
+            signaturePadContext.clearRect(0, 0, signaturePad.width, signaturePad.height);
+            signatureImageData = null; 
+            if (signatureOverlay) {
+                signatureOverlay.innerHTML = '';
+            }
+        }
+
+        signDocumentBtn.addEventListener('click', async () => {
+            if (!signaturePosition) {
+                alert('Por favor, posicione a assinatura no PDF primeiro.');
+                return;
+            }
+            if (!signatureImageData) {
+                alert('Por favor, desenhe e confirme sua assinatura primeiro.');
+                return;
+            }
+
+            signDocumentBtn.disabled = true; 
+            signDocumentBtn.textContent = 'Assinando... Por favor, aguarde.'; 
+            loadingSpinner.style.display = 'flex'; 
+
+            try {
+                const user = auth.currentUser;
+                if (!user) {
+                    alert('Usuário não logado. Por favor, faça login novamente.');
+                    window.location.href = '/login.html';
+                    return;
+                }
+                const userDoc = await db.collection('users').doc(user.uid).get();
+                const userCPF = userDoc.exists ? userDoc.data().cpf : null;
+
+                if (!userCPF) {
+                    alert('CPF do usuário não encontrado. Não é possível assinar.');
+                    return; 
+                }
+
+                const response = await fetch('/api/sign-document', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        documentId: currentDocumentId,
+                        signatureX: signaturePosition.x,
+                        signatureY: signaturePosition.y,
+                        signatureWidth: signaturePosition.width,
+                        signatureHeight: signaturePosition.height,
+                        signaturePage: signaturePosition.pageNum,
+                        userCPF: userCPF,
+                        signatureImage: signatureImageData 
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(`Erro ao assinar documento: ${errorData.error || response.statusText}`);
+                }
+
+                const result = await response.json();
+                alert('Documento assinado com sucesso! URL do documento assinado: ' + result.signedUrl);
+                window.location.href = '/list.html';
+
+            } catch (error) {
+                console.error('Erro ao assinar documento:', error);
+                alert('Erro ao assinar documento: ' + error.message);
+            } finally {
+                signDocumentBtn.disabled = false;
+                signDocumentBtn.textContent = 'Assinar Documento Agora';
+                loadingSpinner.style.display = 'none'; 
+            }
+        });
+
+    </script>
+</body>
+</html>

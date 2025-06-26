@@ -5,13 +5,15 @@ import fs from "fs/promises";
 import { constants as FS_CONSTANTS } from "fs";
 import os from "os"; // Importa o módulo 'os' para obter o diretório temporário
 
-  // Inicializa o Firebase Admin SDK APENAS UMA VEZ
+// Inicializa o Firebase Admin SDK APENAS UMA VEZ
 if (!admin.apps.length) {
   try {
     const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
     admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),      
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET_URL // <--- VOLTAR PARA ISTO
+      credential: admin.credential.cert(serviceAccount),       
+      // Use process.env.FIREBASE_STORAGE_BUCKET_URL se você o configurou
+      // Caso contrário, use o nome exato do seu bucket aqui:
+      storageBucket: "assinarpdfdocs.firebasestorage.app" // <<--- Use este nome EXATO!
     });
   } catch (error) {
     console.error("Erro ao inicializar o Firebase Admin SDK:", error);
@@ -108,22 +110,26 @@ export default async function handler(req, res) {
     const fileContent = await fs.readFile(pdfFile.filepath);
 
     // Faz o upload para o Firebase Storage
-    await bucket.file(filePath).save(fileContent, {
+    const fileRef = bucket.file(filePath); // Crie uma referência ao arquivo
+    await fileRef.save(fileContent, {
       contentType: pdfFile.mimetype, // Define o tipo de conteúdo do arquivo
     });
 
-    // Obtém a URL de download pública do arquivo
-    const [url] = await bucket.file(filePath).getSignedUrl({
-      action: "read",
-      expires: "03-17-2030", // Ajuste a data de expiração conforme sua necessidade
-    });
+    // --- MUDANÇA CRUCIAL AQUI ---
+    // Torna o arquivo público (se suas regras já permitem leitura, isso reforça).
+    // Isso é necessário para que a URL gerada por .publicUrl() seja acessível.
+    await fileRef.makePublic(); 
+    
+    // Obtém a URL de download PÚBLICA DIRETA do arquivo
+    const publicDownloadUrl = fileRef.publicUrl(); 
+    // --- FIM DA MUDANÇA ---
 
     // Salva metadados do documento no Cloud Firestore
     await db.collection("documents").add({
       cpf_associado: cpf_associado,
       nome_arquivo_original: pdfFile.originalFilename,
       caminho_storage_original: filePath,
-      url_original: url,
+      url_original: publicDownloadUrl, // SALVE A URL PÚBLICA DIRETA AQUI
       status: "pendente",
       data_upload: admin.firestore.FieldValue.serverTimestamp(),
     });
@@ -146,7 +152,7 @@ export default async function handler(req, res) {
       fileName: pdfFile.originalFilename,
       cpfAssociado: cpf_associado,
       storagePath: filePath,
-      downloadUrl: url,
+      downloadUrl: publicDownloadUrl, // Retorne a URL pública também para o frontend de upload
     });
   } catch (error) {
     console.error("Erro no processamento da requisição ou Firebase:", error);

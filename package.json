@@ -1,6 +1,8 @@
 {
   "dependencies": {
+    "axios": "^1.10.0",
     "firebase-admin": "^13.4.0",
-    "formidable": "^3.5.4"
+    "formidable": "^3.5.4",
+    "pdf-lib": "^1.17.1"
   }
 }
