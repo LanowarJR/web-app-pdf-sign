@@ -3,209 +3,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Upload de Documento PDF</title>
+    <title>Upload de Documentos PDF</title>
     <style>
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f0f2f5;
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f4f4f4;
             color: #333;
-            display: flex;
-            flex-direction: column;
-            align-items: center; /* Centraliza horizontalmente */
-            min-height: 100vh; /* Garante que o body ocupa a altura total */
-            justify-content: center; /* Centraliza verticalmente */
+        }
+        .container {
+            background-color: #fff;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            margin: 50px auto;
         }
         h1 {
-            color: #2c3e50;
             text-align: center;
+            color: #0056b3;
             margin-bottom: 30px;
-            font-size: 2.2em;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.1);
         }
-        .upload-card {
-            background-color: #ffffff;
-            border: 1px solid #e0e0e0;
-            border-radius: 10px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-            padding: 30px;
-            width: 100%;
-            max-width: 500px; /* Largura máxima para o formulário */
-            box-sizing: border-box;
+        form {
             display: flex;
             flex-direction: column;
-            gap: 20px; /* Espaço entre os elementos do formulário */
-        }
-        .form-group {
-            margin-bottom: 15px;
+            gap: 15px;
         }
         label {
-            display: block;
-            margin-bottom: 8px;
             font-weight: bold;
-            color: #555;
-        }
-        input[type="file"],
-        input[type="text"] {
-            width: 100%;
-            padding: 12px;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box; /* Garante que padding e borda não aumentem a largura */
-            font-size: 1em;
+            margin-bottom: 5px;
         }
         input[type="file"] {
-            padding: 8px; /* Ajuste para input file */
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            background-color: #e9e9e9;
         }
         button {
-            width: 100%;
-            padding: 15px;
-            background-color: #28a745;
+            padding: 12px 20px;
+            background-color: #007bff;
             color: white;
             border: none;
-            border-radius: 5px;
-            font-size: 1.1em;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 1em;
             transition: background-color 0.3s ease;
         }
         button:hover {
-            background-color: #218838;
+            background-color: #0056b3;
         }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        #responseMessage {
+        #message {
             margin-top: 20px;
-            padding: 15px;
-            border-radius: 8px;
-            font-weight: bold;
+            padding: 10px;
+            border-radius: 4px;
             text-align: center;
-            word-wrap: break-word; /* Garante que mensagens longas quebrem a linha */
+            display: none;
         }
-        #responseMessage.success {
+        .success {
             background-color: #d4edda;
             color: #155724;
             border: 1px solid #c3e6cb;
         }
-        #responseMessage.error {
+        .error {
             background-color: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
         }
-
-        /* Indicador de carregamento (Spinner) */
-        .spinner {
-            border: 4px solid rgba(0, 0, 0, 0.1);
-            border-left-color: #28a745;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-            margin-left: 10px;
-            display: none; /* Escondido por padrão */
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
-        }
-
-        /* Responsividade básica */
-        @media (max-width: 600px) {
-            body {
-                padding: 15px;
-            }
-            .upload-card {
-                padding: 20px;
-                box-shadow: none; /* Remove sombra em telas muito pequenas para visual mais limpo */
-                border: none; /* Remove borda em telas muito pequenas */
-                border-radius: 0;
-            }
-            h1 {
-                font-size: 1.8em;
-            }
+        .info {
+            background-color: #cfe2ff;
+            color: #052c65;
+            border: 1px solid #b6d4fe;
         }
     </style>
 </head>
 <body>
-    <h1>Carregar Documento PDF para Assinatura</h1>
-
-    <div class="upload-card">
+    <div class="container">
+        <h1>Fazer Upload de Documentos PDF</h1>
         <form id="uploadForm">
-            <div class="form-group">
-                <label for="pdfFile">Selecione o Arquivo PDF:</label>
-                <input type="file" id="pdfFile" name="pdfFile" accept=".pdf" required>
+            <label for="documentFile">Selecione o(s) arquivo(s) PDF:</label>
+            <input type="file" id="documentFile" name="document" accept=".pdf" multiple>
+            
+            <div id="fileNamingTip" class="info">
+                **Dica:** Para automação, renomeie seus PDFs como `[NomeDoDocumento]_[CPF_DoAssociado].pdf`.<br>
+                Ex: `ContratoDeTrabalho_12345678900.pdf`
             </div>
 
-            <div class="form-group">
-                <label for="cpfAssociado">CPF Associado:</label>
-                <input type="text" id="cpfAssociado" name="cpf_associado" placeholder="Digite o CPF associado ao documento" required>
-            </div>
-
-            <button type="submit" id="submitButton">
-                Carregar Documento
-                <span class="spinner" id="loadingSpinner"></span>
-            </button>
+            <button type="submit">Enviar Documentos</button>
         </form>
-
-        <div id="responseMessage" style="display: none;"></div>
+        <div id="message"></div>
     </div>
 
     <script>
-        const uploadForm = document.getElementById('uploadForm');
-        const pdfFileInput = document.getElementById('pdfFile');
-        const cpfAssociadoInput = document.getElementById('cpfAssociado');
-        const submitButton = document.getElementById('submitButton');
-        const responseMessageDiv = document.getElementById('responseMessage');
-        const loadingSpinner = document.getElementById('loadingSpinner');
+        document.getElementById('uploadForm').addEventListener('submit', async function(event) {
+            event.preventDefault(); 
 
-        uploadForm.addEventListener('submit', async (e) => {
-            e.preventDefault(); // Impede o envio padrão do formulário
+            const fileInput = document.getElementById('documentFile');
+            const messageDiv = document.getElementById('message');
+            
+            const files = fileInput.files; 
 
-            responseMessageDiv.style.display = 'none'; // Esconde mensagens anteriores
-            responseMessageDiv.className = ''; // Limpa classes de status
-            submitButton.disabled = true; // Desabilita o botão
-            loadingSpinner.style.display = 'inline-block'; // Mostra o spinner
+            messageDiv.textContent = '';
+            messageDiv.className = '';
+            messageDiv.style.display = 'none';
 
+            if (files.length === 0) {
+                displayMessage('Por favor, selecione pelo menos um arquivo PDF.', 'error');
+                return;
+            }
+            
             const formData = new FormData();
-            formData.append('pdfFile', pdfFileInput.files[0]);
-            formData.append('cpf_associado', cpfAssociadoInput.value);
+            // Nao precisamos mais do CPF no FormData, pois será extraido do nome do arquivo
+            // formData.append('cpf', cpf); 
+
+            for (let i = 0; i < files.length; i++) {
+                formData.append('documents[]', files[i]);
+            }
 
             try {
+                displayMessage('Enviando documentos...', 'info'); // Use info para "processando"
+                
                 const response = await fetch('/api/upload-document', {
                     method: 'POST',
                     body: formData,
                 });
 
-                const data = await response.json();
+                const result = await response.json();
 
-                if (response.ok) {
-                    responseMessageDiv.className = 'success';
-                    responseMessageDiv.innerHTML = `
-                        ${data.message}<br>
-                        <strong>Nome do Arquivo:</strong> ${data.fileName}<br>
-                        <strong>CPF Associado:</strong> ${data.cpfAssociado}<br>
-                        <a href="${data.downloadUrl}" target="_blank">Baixar Documento</a>
-                    `;
-                } else {
-                    responseMessageDiv.className = 'error';
-                    responseMessageDiv.innerHTML = `Erro do servidor: ${data.message || 'Ocorreu um erro desconhecido.'} ${data.error ? `<br>Detalhes: ${JSON.stringify(data.error)}` : ''}`;
-                    console.error('Erro no upload:', data);
+                if (!response.ok) { // Se a resposta não for OK (status 4xx ou 5xx)
+                    throw new Error(result.details || result.message || 'Erro desconhecido ao fazer upload do documento(s).');
                 }
+
+                let successMsg = result.message;
+                if (result.documentIds && result.documentIds.length > 0) {
+                    successMsg += ` IDs: ${result.documentIds.join(', ')}`;
+                }
+                if (result.errors && result.errors.length > 0) {
+                    successMsg += ` Erros em ${result.errors.length} arquivo(s): ` + result.errors.map(err => err.fileName).join(', ');
+                    displayMessage(successMsg, 'error'); // Se houve erros em alguns, mostre como erro
+                } else {
+                    displayMessage(successMsg, 'success');
+                }
+                
+                fileInput.value = ''; // Limpa os arquivos selecionados
+
             } catch (error) {
-                responseMessageDiv.className = 'error';
-                responseMessageDiv.innerHTML = `Erro na requisição: ${error.message}. Verifique sua conexão.`;
-                console.error('Erro de rede ou na requisição:', error);
-            } finally {
-                responseMessageDiv.style.display = 'block'; // Mostra a mensagem
-                submitButton.disabled = false; // Reabilita o botão
-                loadingSpinner.style.display = 'none'; // Esconde o spinner
+                console.error('Erro no upload:', error);
+                displayMessage('Erro no upload: ' + error.message, 'error');
             }
         });
+
+        function displayMessage(msg, type) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = msg;
+            messageDiv.className = type;
+            messageDiv.style.display = 'block';
+        }
     </script>
 </body>
 </html>

@@ -39,6 +39,22 @@ if (!global.firebaseAdminInitialized) {
 const db = getFirestore();
 const storage = getStorage(); // Inicializa o Storage
 
+/**
+ * Função auxiliar para extrair o CPF de um nome de arquivo.
+ * Espera o formato "nome_cpf.pdf" onde cpf são 11 dígitos numéricos.
+ * Retorna o CPF ou null se não for encontrado ou for inválido.
+ */
+function extractCpfFromFileName(fileName) {
+    // Expressão regular para encontrar 11 dígitos numéricos precedidos por '_' e seguidos por '.pdf'
+    // A regex captura os 11 dígitos no grupo 1
+    const match = fileName.match(/_(\d{11})\.pdf$/);
+    if (match && match[1]) {
+        return match[1]; // Retorna o CPF capturado
+    }
+    return null; // Retorna null se não encontrar um CPF válido no padrão
+}
+
+
 export default async function handler(req, res) {
     console.log('API upload-document.js recebendo requisição.');
 
@@ -47,9 +63,9 @@ export default async function handler(req, res) {
     }
 
     const form = formidable({ 
-        multiples: false, // Espera apenas um arquivo por vez
-        keepExtensions: true, // Mantém a extensão original do arquivo
-        maxFileSize: 10 * 1024 * 1024, // Limite de 10MB para o arquivo
+        multiples: true, 
+        keepExtensions: true, 
+        maxFileSize: 10 * 1024 * 1024, // Limite de 10MB por arquivo
     });
 
     try {
@@ -63,80 +79,111 @@ export default async function handler(req, res) {
             });
         });
 
-        const file = files.document; // 'document' é o nome do campo de arquivo no frontend
-        const cpf = Array.isArray(fields.cpf) ? fields.cpf[0] : fields.cpf; // Lida com o formidable retornando arrays para campos simples
-
-        if (!file || !cpf) {
-            console.error('Arquivo ou CPF não fornecido no upload.');
-            return res.status(400).json({ error: 'File and CPF are required.' });
+        const uploadedFiles = Array.isArray(files['documents[]']) ? files['documents[]'] : (files['documents[]'] ? [files['documents[]']] : []);
+        
+        if (!uploadedFiles.length) {
+            console.error('Nenhum arquivo fornecido no upload.');
+            return res.status(400).json({ error: 'At least one file is required.' });
         }
 
-        const originalFileName = file.originalFilename;
-        const tempFilePath = file.filepath; // Caminho temporário do arquivo no sistema de arquivos do Vercel
+        const uploadedDocumentIds = []; 
+        const errors = []; // Para coletar erros de arquivos individuais
+        const bucket = storage.bucket(); 
 
-        // Gera um nome único para o arquivo no Storage para evitar colisões
-        const uniqueFileName = `${Date.now()}-${originalFileName}`;
-        const bucket = storage.bucket(); // Pega o bucket padrão configurado na inicialização
-        const fileUpload = bucket.file(uniqueFileName);
+        for (const file of uploadedFiles) {
+            const originalFileName = file.originalFilename;
+            const tempFilePath = file.filepath; 
+            
+            // --- NOVA LÓGICA: EXTRAIR CPF DO NOME DO ARQUIVO ---
+            const cpf = extractCpfFromFileName(originalFileName);
 
-        console.log(`Iniciando upload do arquivo temporário: ${tempFilePath} para ${uniqueFileName}`);
+            if (!cpf) {
+                const errorMsg = `Erro: CPF não encontrado ou inválido no nome do arquivo "${originalFileName}". Formato esperado: nome_11digitosCPF.pdf`;
+                console.error(errorMsg);
+                errors.push({ fileName: originalFileName, error: errorMsg });
+                // Não processa este arquivo e vai para o próximo
+                if (file.filepath) { // Tenta limpar o arquivo temporário mesmo em caso de erro
+                    fs.unlink(file.filepath, (err) => {
+                        if (err) console.error(`Erro ao deletar arquivo temporário de erro ${file.filepath}:`, err);
+                    });
+                }
+                continue; // Pula para o próximo arquivo no loop
+            }
+            // --- FIM DA NOVA LÓGICA ---
 
-        // Faz o upload do arquivo para o Firebase Storage
-        await bucket.upload(tempFilePath, {
-            destination: uniqueFileName,
-            metadata: {
-                contentType: file.mimetype,
-                // Adicione metadados personalizados se desejar
-                metadata: {
-                    uploadedByCpf: cpf,
-                    originalFileName: originalFileName,
-                },
-            },
-        });
+            const uniqueFileName = `${Date.now()}_${originalFileName}`; 
+            const destinationPath = `documents/original/${uniqueFileName}`;
 
-        // Obtém a URL pública do arquivo (pode ser necessário configurar regras de segurança no Firebase Storage)
-        const [url] = await fileUpload.getSignedUrl({
-            action: 'read',
-            expires: '03-09-2491', // Data de expiração bem distante (quase nunca expira)
-        });
+            console.log(`Iniciando upload do arquivo temporário: ${tempFilePath} para ${destinationPath}`);
 
-        console.log(`Upload concluído. URL: ${url.substring(0, 50)}...`);
+            try {
+                await bucket.upload(tempFilePath, {
+                    destination: destinationPath, 
+                    metadata: {
+                        contentType: file.mimetype,
+                        metadata: { 
+                            uploadedByCpf: cpf,
+                            originalFileName: originalFileName,
+                        },
+                    },
+                });
 
-        // Salva os metadados do documento no Firestore
-        const docRef = await db.collection('documents').add({
-            nome_arquivo_original: originalFileName,
-            url_original: url,
-            uploaded_by_cpf: cpf,
-            upload_date: new Date(),
-            status: 'pending_signature', // Ou outro status inicial
-            signed_by_cpf: null, // Inicialmente nulo
-            signed_url: null, // Inicialmente nulo
-        });
+                const [url] = await bucket.file(destinationPath).getSignedUrl({
+                    action: 'read',
+                    expires: '03-09-2491', 
+                });
 
-        console.log(`Documento registrado no Firestore com ID: ${docRef.id}`);
+                console.log(`Upload do arquivo "${originalFileName}" concluído. URL: ${url.substring(0, 50)}...`);
 
-        res.status(200).json({ 
-            message: 'Document uploaded and registered successfully!', 
-            documentId: docRef.id,
-            documentUrl: url,
-        });
+                const docRef = await db.collection('documents').add({
+                    nome_arquivo_original: originalFileName,
+                    url_original: url, 
+                    uploaded_by_cpf: cpf, // O CPF extraído do nome do arquivo
+                    upload_date: new Date(),
+                    status: 'pending_signature', 
+                    signed_by_cpf: null, 
+                    signed_url: null, 
+                });
+                uploadedDocumentIds.push(docRef.id); 
+                console.log(`Documento "${originalFileName}" registrado no Firestore com ID: ${docRef.id}`);
 
-    } catch (error) {
-        console.error('Erro no processo de upload do documento:', error);
+            } catch (fileUploadError) {
+                const errorMsg = `Falha ao processar arquivo "${originalFileName}": ${fileUploadError.message}`;
+                console.error(errorMsg);
+                errors.push({ fileName: originalFileName, error: errorMsg });
+            } finally {
+                // Limpa o arquivo temporário após o processamento (sucesso ou falha)
+                if (file.filepath) {
+                    fs.unlink(file.filepath, (err) => {
+                        if (err) console.error(`Erro ao deletar arquivo temporário ${file.filepath}:`, err);
+                    });
+                }
+            }
+        }
+
+        if (uploadedDocumentIds.length > 0 && errors.length === 0) {
+            res.status(200).json({ 
+                message: `Upload de ${uploadedDocumentIds.length} documento(s) concluído e registrado com sucesso!`, 
+                documentIds: uploadedDocumentIds, 
+            });
+        } else if (uploadedDocumentIds.length > 0 && errors.length > 0) {
+            res.status(200).json({ // Ainda retorna 200 se alguns foram bem-sucedidos
+                message: `Upload de ${uploadedDocumentIds.length} documento(s) concluído com sucesso, mas ${errors.length} arquivo(s) tiveram erros.`,
+                documentIds: uploadedDocumentIds,
+                errors: errors,
+            });
+        } else {
+            res.status(400).json({ // Se nenhum arquivo foi processado com sucesso
+                message: 'Nenhum documento foi processado com sucesso.',
+                errors: errors,
+            });
+        }
+
+    } catch (parseError) {
+        console.error('Erro geral no processo de upload:', parseError);
         res.status(500).json({ 
             error: 'Internal Server Error', 
-            details: error.message,
+            details: parseError.message,
         });
-    } finally {
-        // Limpa o arquivo temporário após o upload
-        if (formidable.file && formidable.file.filepath) {
-            fs.unlink(formidable.file.filepath, (err) => {
-                if (err) console.error('Erro ao deletar arquivo temporário:', err);
-            });
-        } else if (files && files.document && files.document.filepath) {
-             fs.unlink(files.document.filepath, (err) => {
-                if (err) console.error('Erro ao deletar arquivo temporário:', err);
-            });
-        }
     }
 }

@@ -3,20 +3,15 @@
 // Importações necessárias para Firebase Admin SDK
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-// Como você usa Storage, também precisamos importar getStorage
 import { getStorage } from 'firebase-admin/storage'; 
 
 // Garante que o Firebase Admin SDK seja inicializado apenas uma vez para evitar erros.
-// Isso é importante para ambientes como Vercel, que podem re-executar módulos.
 if (!global.firebaseAdminInitialized) {
     try {
-        // Tenta parsear a chave de serviço da variável de ambiente.
-        // É CRUCIAL que FIREBASE_SERVICE_ACCOUNT_KEY esteja configurada corretamente no .env.local e no Vercel.
         const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
         
         initializeApp({
             credential: cert(serviceAccount),
-            // Usando o nome do bucket fornecido por você:
             storageBucket: process.env.FIREBASE_STORAGE_BUCKET 
         });
         
@@ -24,15 +19,14 @@ if (!global.firebaseAdminInitialized) {
         console.log('Firebase Admin SDK inicializado com sucesso em get-documents.js!');
     } catch (error) {
         console.error('ERRO FATAL: Falha ao inicializar Firebase Admin SDK em get-documents.js. Verifique FIREBASE_SERVICE_ACCOUNT_KEY e FIREBASE_STORAGE_BUCKET:', error);
-        // Em um ambiente de produção, você pode querer sair do processo ou desabilitar a API.
     }
 }
 
 const db = getFirestore();
-const storage = getStorage(); // Inicializa o Storage
+const storage = getStorage(); // Inicializa o Storage (mesmo que não seja usado diretamente nesta API, a inicialização é global)
 
 export default async function handler(req, res) {
-    console.log('API get-documents.js recebendo requisição.'); // Log para esta API
+    console.log('API get-documents.js recebendo requisição.');
     console.log('req.query (para get-documents):', req.query); // Log para ver todos os parâmetros
 
     if (req.method !== 'GET') {
@@ -50,15 +44,26 @@ export default async function handler(req, res) {
         console.log(`Buscando documentos para o CPF: ${cpf}`);
         const documentsRef = db.collection('documents');
         
-        // Consulta o Firestore para encontrar documentos onde 'uploaded_by_cpf' ou 'signed_by_cpf' seja igual ao CPF
-        const [uploadedDocsSnap, signedDocsSnap] = await Promise.all([
+        // --- CONSULTAS AO FIRESTORE ---
+        const [uploadedDocsSnap, signedDocsSnap, associatedDocsSnap] = await Promise.all([
+            // Busca por documentos onde o CPF do usuário é o uploader
             documentsRef.where('uploaded_by_cpf', '==', cpf).get(),
-            documentsRef.where('signed_by_cpf', '==', cpf).get()
+            // Busca por documentos onde o CPF do usuário é o signatário
+            documentsRef.where('signed_by_cpf', '==', cpf).get(),
+            // Busca por documentos onde o CPF do usuário está no campo 'cpf_associado'
+            documentsRef.where('cpf_associado', '==', cpf).get() 
         ]);
 
-        const documents = [];
-        const uniqueDocIds = new Set(); // Para evitar duplicatas se um documento for upado E assinado pelo mesmo CPF
+        // --- LOGS PARA INSPEÇÃO DOS DADOS BRUTOS RETORNADOS PELO FIRESTORE ---
+        console.log('API get-documents.js - Dados brutos de uploadedDocsSnap:', uploadedDocsSnap.docs.map(doc => doc.data()));
+        console.log('API get-documents.js - Dados brutos de signedDocsSnap:', signedDocsSnap.docs.map(doc => doc.data()));
+        console.log('API get-documents.js - Dados brutos de associatedDocsSnap:', associatedDocsSnap.docs.map(doc => doc.data()));
+        // --- FIM DOS LOGS ---
 
+        const documents = [];
+        const uniqueDocIds = new Set(); // Para garantir que cada documento seja listado apenas uma vez
+
+        // Adiciona documentos encontrados pelas diferentes queries, evitando duplicatas
         uploadedDocsSnap.forEach(doc => {
             if (!uniqueDocIds.has(doc.id)) {
                 documents.push({ id: doc.id, ...doc.data() });
@@ -67,6 +72,13 @@ export default async function handler(req, res) {
         });
 
         signedDocsSnap.forEach(doc => {
+            if (!uniqueDocIds.has(doc.id)) {
+                documents.push({ id: doc.id, ...doc.data() });
+                uniqueDocIds.add(doc.id);
+            }
+        });
+
+        associatedDocsSnap.forEach(doc => { // Processa os documentos encontrados pelo 'cpf_associado'
             if (!uniqueDocIds.has(doc.id)) {
                 documents.push({ id: doc.id, ...doc.data() });
                 uniqueDocIds.add(doc.id);
