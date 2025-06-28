@@ -1,18 +1,36 @@
 // api/get-document.js
+
+// Importações necessárias para Firebase Admin SDK
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
+// Como você usa Storage, também precisamos importar getStorage
+import { getStorage } from 'firebase-admin/storage'; 
 
-// Garante que o Firebase Admin SDK seja inicializado apenas uma vez.
+// Garante que o Firebase Admin SDK seja inicializado apenas uma vez para evitar erros.
+// Isso é importante para ambientes como Vercel, que podem re-executar módulos.
 if (!global.firebaseAdminInitialized) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    initializeApp({
-        credential: cert(serviceAccount),
-        // storageBucket não é estritamente necessário aqui, mas manter se desejar consistência
-    });
-    global.firebaseAdminInitialized = true;
+    try {
+        // Tenta parsear a chave de serviço da variável de ambiente.
+        // É CRUCIAL que FIREBASE_SERVICE_ACCOUNT_KEY esteja configurada corretamente no .env.local e no Vercel.
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        
+        initializeApp({
+            credential: cert(serviceAccount),
+            // Defina seu bucket do Storage aqui. O nome do bucket é tipicamente algo como "seu-projeto-id.appspot.com".
+            // Você pode encontrar isso nas configurações do seu projeto Firebase (Project settings -> Storage).
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET // Garanta que esta variável de ambiente exista no .env.local/Vercel
+        });
+        
+        global.firebaseAdminInitialized = true;
+        console.log('Firebase Admin SDK inicializado com sucesso em get-document.js!');
+    } catch (error) {
+        console.error('ERRO FATAL: Falha ao inicializar Firebase Admin SDK em get-document.js. Verifique FIREBASE_SERVICE_ACCOUNT_KEY e FIREBASE_STORAGE_BUCKET:', error);
+        // Em um ambiente de produção, você pode querer sair do processo ou desabilitar a API.
+    }
 }
 
 const db = getFirestore();
+const storage = getStorage(); // Inicializa o Storage
 
 export default async function handler(req, res) {
     console.log('API get-document.js recebendo requisição.');

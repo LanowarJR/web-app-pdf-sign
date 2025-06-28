@@ -1,23 +1,45 @@
 // api/sign-document.js
+
+// Importações necessárias para Firebase Admin SDK e pdf-lib
 import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
-import { getStorage } from 'firebase-admin/storage';
+import { getStorage } from 'firebase-admin/storage'; 
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import axios from 'axios'; 
-import path from 'path'; 
+import fetch from 'node-fetch'; // Para buscar o PDF original da URL
+import { Readable } from 'stream'; // Para lidar com streams de buffer
+import { promisify } from 'util'; // Para promisificar stream.pipeline
+import { pipeline } from 'stream';
 
-// Inicialize o Firebase Admin SDK APENAS UMA VEZ
+const pipelineAsync = promisify(pipeline);
+
+// Configuração para desativar o body-parser padrão do Next.js (ou Vercel) para lidar com JSON bruto
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '10mb', // Aumenta o limite para lidar com PDFs maiores
+        },
+    },
+};
+
+// Garante que o Firebase Admin SDK seja inicializado apenas uma vez para evitar erros.
 if (!global.firebaseAdminInitialized) {
-    const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-    initializeApp({
-        credential: cert(serviceAccount),
-        storageBucket: 'assinarpdfdocs.firebasestorage.app'
-    });
-    global.firebaseAdminInitialized = true;
+    try {
+        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
+        
+        initializeApp({
+            credential: cert(serviceAccount),
+            storageBucket: process.env.FIREBASE_STORAGE_BUCKET 
+        });
+        
+        global.firebaseAdminInitialized = true;
+        console.log('Firebase Admin SDK inicializado com sucesso em sign-document.js!');
+    } catch (error) {
+        console.error('ERRO FATAL: Falha ao inicializar Firebase Admin SDK em sign-document.js. Verifique FIREBASE_SERVICE_ACCOUNT_KEY e FIREBASE_STORAGE_BUCKET:', error);
+    }
 }
 
 const db = getFirestore();
-const bucket = getStorage().bucket();
+const storage = getStorage(); // Inicializa o Storage
 
 export default async function handler(req, res) {
     console.log('API sign-document.js recebendo requisição.');
@@ -26,136 +48,152 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
+    const { documentId, signatureData, signedByCpf } = req.body;
+
+    if (!documentId || !signatureData || !signedByCpf) {
+        console.error('Dados incompletos para assinar documento:', { documentId, signatureData, signedByCpf });
+        return res.status(400).json({ error: 'Missing documentId, signatureData, or signedByCpf.' });
+    }
+
     try {
-        const { documentId, signatureX, signatureY, signatureWidth, signatureHeight, signaturePage, userCPF, signatureImage } = req.body;
-
-        console.log('Dados recebidos do frontend para assinatura:', {
-            documentId,
-            signatureX,
-            signatureY,
-            signatureWidth,
-            signatureHeight,
-            signaturePage,
-            userCPF: userCPF ? userCPF.substring(0, 5) + '...' : 'N/A', 
-            signatureImage: signatureImage ? signatureImage.substring(0, 50) + '...' : 'N/A' 
-        });
-
-        if (!documentId || !signatureX || !signatureY || !signatureWidth || !signatureHeight || !signaturePage || !userCPF || !signatureImage) {
-            console.error('Missing required fields for signature.');
-            return res.status(400).json({ error: 'Missing required fields for signature.' });
-        }
-
+        // 1. Obter URL do documento original do Firestore
         const docRef = db.collection('documents').doc(documentId);
         const docSnap = await docRef.get();
 
         if (!docSnap.exists) {
-            console.error('Documento não encontrado no Firestore:', documentId);
-            return res.status(404).json({ error: 'Documento não encontrado no Firestore.' });
+            console.warn(`Documento com ID ${documentId} não encontrado no Firestore.`);
+            return res.status(404).json({ error: 'Document not found.' });
         }
 
         const docData = docSnap.data();
         const originalPdfUrl = docData.url_original;
+        const originalFileName = docData.nome_arquivo_original;
 
         if (!originalPdfUrl) {
-            console.error('URL do PDF original não encontrada no documento do Firestore para ID:', documentId);
-            return res.status(400).json({ error: 'URL do PDF original não encontrada no documento do Firestore.' });
+            console.error(`URL original do PDF não encontrada para o documento ID: ${documentId}`);
+            return res.status(400).json({ error: 'Original PDF URL not found for this document.' });
         }
-        console.log('URL original do PDF obtida:', originalPdfUrl);
 
-        const response = await axios.get(originalPdfUrl, { responseType: 'arraybuffer' });
-        const existingPdfBytes = response.data;
+        console.log(`Buscando PDF original de: ${originalPdfUrl.substring(0, 50)}...`);
+
+        // 2. Baixar o PDF original
+        const response = await fetch(originalPdfUrl);
+        if (!response.ok) {
+            throw new Error(`Falha ao baixar PDF original: ${response.statusText}`);
+        }
+        const pdfBytes = await response.arrayBuffer();
         console.log('PDF original baixado com sucesso.');
 
-        const pdfDoc = await PDFDocument.load(existingPdfBytes);
-        console.log('PDF carregado com pdf-lib.');
-
-        const signatureImageBase64 = signatureImage.split(',')[1];
-        const signaturePng = await pdfDoc.embedPng(Buffer.from(signatureImageBase64, 'base64'));
-        console.log('Assinatura PNG incorporada.');
-
+        // 3. Carregar o PDF com pdf-lib
+        const pdfDoc = await PDFDocument.load(pdfBytes);
         const pages = pdfDoc.getPages();
-        if (signaturePage > pages.length || signaturePage < 1) {
-            console.error('Página de assinatura inválida. Requisitada:', signaturePage, 'Total de páginas:', pages.length);
-            return res.status(400).json({ error: 'Página de assinatura inválida.' });
+        const firstPage = pages[signatureData.pageIndex];
+
+        if (!firstPage) {
+            console.error(`Página ${signatureData.pageIndex} não encontrada no PDF.`);
+            return res.status(400).json({ error: 'Page not found in PDF.' });
         }
-        const page = pages[signaturePage - 1]; // pdf-lib usa índice baseado em 0 para páginas
 
-        const pageWidth = page.getWidth();
-        const pageHeight = page.getHeight();
-        console.log(`Backend - Dimensões da página no pdf-lib: Largura=${pageWidth.toFixed(2)}pt, Altura=${pageHeight.toFixed(2)}pt`);
+        const { width: pageWidth, height: pageHeight } = firstPage.getSize();
 
-        // NOVO CÁLCULO DE COORDENADAS:
-        // A escala de renderização que você usa no frontend (sign.html) é 1.5.
-        // Isso significa que 1 pixel no seu canvas do frontend corresponde a 1/1.5 pontos no PDF original.
+        // 4. Calcular as coordenadas finais para o pdf-lib
+        // Lembre-se: pdf-lib usa coordenadas com origem no canto INFERIOR esquerdo
+        // O frontend usa origem no canto SUPERIOR esquerdo.
+        // A escala de renderização do frontend é 1.5.
         const frontendRenderScale = 1.5; 
 
-        // Converte as coordenadas X e Y e as dimensões (Largura e Altura)
-        // dos pixels do canvas ampliado (frontend) para os pontos do PDF original (backend).
+        const signatureX = signatureData.x;
+        const signatureY = signatureData.y;
+        const signatureWidth = signatureData.width;
+        const signatureHeight = signatureData.height;
+        const signatureText = signatureData.text; // O texto da assinatura
+
+        // Ajusta as coordenadas do frontend (pixels na tela) para pontos do PDF
+        // e inverte o eixo Y para a convenção do pdf-lib.
         const finalPdfX = signatureX / frontendRenderScale;
         const finalPdfWidth = signatureWidth / frontendRenderScale;
-        
-        // Ajusta a coordenada Y:
-        // O frontend (pdf.js) mede Y a partir do topo da página.
-        // O pdf-lib mede Y a partir da base (fundo) da página.
-        // Então, para converter, pegamos a altura total da página do PDF,
-        // subtraímos a coordenada Y do topo (já convertida para pontos)
-        // e também subtraímos a altura da assinatura (também convertida para pontos).
-        // Isso nos dá a coordenada Y correta a partir da base.
+        // Calcula a posição Y no PDF (origem inferior esquerda)
+        // signatureY é a distância do topo da página no frontend.
+        // signatureHeight é a altura da caixa de assinatura no frontend.
+        // pageHeight é a altura da página do PDF em pontos.
         const finalPdfY = pageHeight - (signatureY / frontendRenderScale + signatureHeight / frontendRenderScale);
+        const finalPdfHeight = signatureHeight / frontendRenderScale;
 
-        console.log('Backend - Coordenadas originais do frontend (em pixels do canvas, incluindo scroll do container):', { signatureX, signatureY, signatureWidth, signatureHeight });
-        console.log('Backend - Escala de renderização do frontend:', frontendRenderScale);
-        console.log('Backend - Coordenadas FINAIS para pdf-lib (em pontos, ajustadas para Y do fundo):', {
-            x: finalPdfX.toFixed(2),
-            y: finalPdfY.toFixed(2),
-            width: finalPdfWidth.toFixed(2),
-            height: (signatureHeight / frontendRenderScale).toFixed(2) // Altura também precisa ser escalada
+
+        console.log('Backend - Coordenadas originais do frontend (pixels na tela):', { x: signatureX, y: signatureY, width: signatureWidth, height: signatureHeight, pageIndex: signatureData.pageIndex });
+        console.log('Backend - Coordenadas FINAIS para pdf-lib (pontos do PDF):', { x: finalPdfX, y: finalPdfY, width: finalPdfWidth, height: finalPdfHeight, pageIndex: signatureData.pageIndex });
+
+
+        // 5. Adicionar a assinatura ao PDF
+        // Usar uma fonte padrão que suporte caracteres variados
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica); // Ou Helvetica-Bold, Times-Roman, etc.
+
+        firstPage.drawText(signatureText, {
+            x: finalPdfX + 2, // Pequeno ajuste para não ficar colado na borda da caixa
+            y: finalPdfY + 2, // Pequeno ajuste
+            font,
+            size: finalPdfHeight * 0.7, // Ajusta o tamanho da fonte para caber na caixa
+            color: rgb(0, 0, 0), // Cor preta
         });
 
-        // Aplica a assinatura na página usando as coordenadas e dimensões *ajustadas*
-        page.drawImage(signaturePng, {
-            x: finalPdfX,
-            y: finalPdfY, 
-            width: finalPdfWidth,
-            height: signatureHeight / frontendRenderScale // Use a altura já escalada
-        });
-        console.log('Assinatura aplicada na página.');
+        // Opcional: Desenhar um retângulo para visualizar a área da assinatura (para depuração)
+        // firstPage.drawRectangle({
+        //     x: finalPdfX,
+        //     y: finalPdfY,
+        //     width: finalPdfWidth,
+        //     height: finalPdfHeight,
+        //     borderColor: rgb(1, 0, 0), // Vermelho
+        //     borderWidth: 1,
+        // });
 
-        const signedPdfBytes = await pdfDoc.save();
-        console.log('PDF modificado salvo.');
+        // 6. Salvar o PDF modificado
+        const modifiedPdfBytes = await pdfDoc.save();
+        console.log('PDF modificado com a assinatura.');
 
-        const originalFileName = docData.nome_arquivo_original;
-        const signedFileName = `signed_${Date.now()}_${userCPF.replace(/\D/g, '')}_${originalFileName}`;
-        const file = bucket.file(`documents/signed/${signedFileName}`);
+        // 7. Fazer upload do PDF assinado para o Firebase Storage
+        const bucket = storage.bucket();
+        const signedFileName = `signed_${Date.now()}_${originalFileName}`;
+        const fileUpload = bucket.file(signedFileName);
 
-        await file.save(signedPdfBytes, {
+        // Cria um stream a partir do buffer para o upload
+        const bufferStream = new Readable();
+        bufferStream.push(Buffer.from(modifiedPdfBytes));
+        bufferStream.push(null); // Indica o fim do stream
+
+        await pipelineAsync(bufferStream, fileUpload.createWriteStream({
             metadata: {
                 contentType: 'application/pdf',
                 metadata: {
-                    signedByCPF: userCPF,
                     originalDocumentId: documentId,
-                    originalFileName: originalFileName
-                }
-            }
+                    signedByCpf: signedByCpf,
+                },
+            },
+        }));
+
+        const [signedUrl] = await fileUpload.getSignedUrl({
+            action: 'read',
+            expires: '03-09-2491', // Data de expiração bem distante
         });
-        console.log('PDF assinado carregado para o Storage.');
 
-        await file.makePublic();
-        const signedUrl = file.publicUrl();
-        console.log('PDF assinado tornado público. URL:', signedUrl);
+        console.log(`PDF assinado uploaded. URL: ${signedUrl.substring(0, 50)}...`);
 
+        // 8. Atualizar o documento no Firestore
         await docRef.update({
+            status: 'signed',
+            signed_by_cpf: signedByCpf,
             signed_url: signedUrl,
-            signed_at: new Date(),
-            signed_by_cpf: userCPF,
-            status: 'signed'
+            signed_date: new Date(),
         });
-        console.log('Firestore atualizado com a URL do documento assinado.');
 
-        res.status(200).json({ signedUrl: signedUrl });
+        console.log(`Documento ${documentId} atualizado no Firestore com status 'signed'.`);
+
+        res.status(200).json({ 
+            message: 'Document signed successfully!', 
+            signedUrl: signedUrl,
+        });
 
     } catch (error) {
-        console.error('Erro detalhado no sign-document API:', error);
+        console.error('Erro ao assinar documento:', error);
         res.status(500).json({ 
             error: 'Internal Server Error', 
             details: error.message,
