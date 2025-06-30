@@ -33,13 +33,13 @@ if (!global.firebaseAdminInitialized) {
         
         global.firebaseAdminInitialized = true;
         console.log('Firebase Admin SDK inicializado com sucesso em sign-document.js!');
-    } catch (error) {
-        console.error('ERRO FATAL: Falha ao inicializar Firebase Admin SDK em sign-document.js. Verifique FIREBASE_SERVICE_ACCOUNT_KEY e FIREBASE_STORAGE_BUCKET:', error);
+    } catch (e) {
+        console.error('Falha ao inicializar Firebase Admin SDK em sign-document.js:', e);
     }
 }
 
 const db = getFirestore();
-const storage = getStorage(); // Inicializa o Storage
+const bucket = getStorage().bucket();
 
 export default async function handler(req, res) {
     console.log('API sign-document.js recebendo requisição.');
@@ -48,11 +48,13 @@ export default async function handler(req, res) {
         return res.status(405).json({ error: 'Method Not Allowed' });
     }
 
-    const { documentId, signatureData, signedByCpf } = req.body;
+    // signatureData agora é esperado como um ARRAY de objetos de assinatura
+    // Renomeado signatureData para signaturesDataArray para clareza no backend
+    const { documentId, signatureData: signaturesDataArray, signedByCpf } = req.body; 
 
-    if (!documentId || !signatureData || !signedByCpf) {
-        console.error('Dados incompletos para assinar documento:', { documentId, signatureData, signedByCpf });
-        return res.status(400).json({ error: 'Missing documentId, signatureData, or signedByCpf.' });
+    if (!documentId || !signaturesDataArray || !signedByCpf || !Array.isArray(signaturesDataArray)) {
+        console.error('Dados incompletos ou inválidos para assinar documento:', { documentId, signaturesDataArray, signedByCpf });
+        return res.status(400).json({ error: 'Missing or invalid documentId, signatureData (must be an array), or signedByCpf.' });
     }
 
     try {
@@ -86,75 +88,114 @@ export default async function handler(req, res) {
 
         // 3. Carregar o PDF com pdf-lib
         const pdfDoc = await PDFDocument.load(pdfBytes);
-        const pages = pdfDoc.getPages();
-        const firstPage = pages[signatureData.pageIndex];
+        const pages = pdfDoc.getPages(); // Obtém todas as páginas do PDF
 
-        if (!firstPage) {
-            console.error(`Página ${signatureData.pageIndex} não encontrada no PDF.`);
-            return res.status(400).json({ error: 'Page not found in PDF.' });
+        // 4. Iterar sobre cada assinatura no array e adicioná-la à página correta
+        for (const signatureData of signaturesDataArray) {
+            const pageIndex = signatureData.pageIndex;
+            
+            // Validação do pageIndex
+            // O frontend envia 0 para a primeira página, então pageIndex pode ser 0
+            if (pageIndex === undefined || pageIndex < 0 || pageIndex >= pages.length) {
+                console.error(`Índice de página inválido (${pageIndex}) ou fora do intervalo para o PDF. Total de páginas: ${pages.length}. Pulando esta assinatura.`);
+                // Continuar para a próxima assinatura se o pageIndex for inválido para não quebrar toda a operação
+                continue; 
+            }
+
+            const page = pages[pageIndex]; // Acessa a página correta usando o índice (0-based)
+            const { width: pageWidth, height: pageHeight } = page.getSize();
+
+            // Lembre-se: pdf-lib usa coordenadas com origem no canto INFERIOR esquerdo
+            // O frontend usa origem no canto SUPERIOR esquerdo.
+            // A escala de renderização do frontend é 1.5.
+            const frontendRenderScale = 1.5;
+
+            const signatureX = signatureData.x;
+            const signatureY = signatureData.y;
+            const signatureWidth = signatureData.width;
+            const signatureHeight = signatureData.height;
+            const signatureContent = signatureData.content; // 'content' pode ser texto ou base64 da imagem
+
+            // Ajusta as coordenadas do frontend (pixels na tela) para pontos do PDF
+            // e inverte o eixo Y para a convenção do pdf-lib.
+            const finalPdfX = signatureX / frontendRenderScale;
+            const finalPdfWidth = signatureWidth / frontendRenderScale;
+
+            // Calcula a posição Y no PDF (origem inferior esquerda)
+            // signatureY é a distância do topo da página no frontend.
+            // signatureHeight é a altura da caixa de assinatura no frontend.
+            // pageHeight é a altura da página do PDF em pontos.
+            const finalPdfY = pageHeight - (signatureY / frontendRenderScale + signatureHeight / frontendRenderScale);
+            const finalPdfHeight = signatureHeight / frontendRenderScale;
+
+            console.log('Backend - Coordenadas originais do frontend (pixels na tela):', {
+                x: signatureX,
+                y: signatureY,
+                width: signatureWidth,
+                height: signatureHeight,
+                pageIndex: pageIndex
+            });
+            console.log('Backend - Coordenadas ajustadas para PDF-lib (pontos):', {
+                x: finalPdfX.toFixed(2),
+                y: finalPdfY.toFixed(2),
+                width: finalPdfWidth.toFixed(2),
+                height: finalPdfHeight.toFixed(2),
+            });
+
+
+            if (signatureData.type === 'drawing') {
+                // Adiciona imagem (desenho)
+                // O `signatureContent` já é o base64
+                // Converta de data:image/png;base64,... para bytes
+                const base64Data = signatureContent.replace(/^data:image\/(png|jpeg|jpg);base64,/, '');
+                const imageBytes = Buffer.from(base64Data, 'base64');
+                const image = await pdfDoc.embedPng(imageBytes); // Supondo PNG transparente
+
+                page.drawImage(image, {
+                    x: finalPdfX,
+                    y: finalPdfY,
+                    width: finalPdfWidth,
+                    height: finalPdfHeight,
+                });
+                console.log(`Assinatura de desenho adicionada à página ${pageIndex + 1}.`); // +1 para mostrar a página 1-based no log
+
+            } else if (signatureData.type === 'text') {
+                // Adiciona texto
+                // Certifique-se de que fontFamily está sendo enviado do frontend
+                const fontName = signatureData.fontFamily || StandardFonts.Helvetica;
+                let font;
+                try {
+                    font = await pdfDoc.embedFont(StandardFonts[fontName]);
+                } catch (e) {
+                    console.warn(`Fonte "${fontName}" não encontrada no StandardFonts, usando Helvetica.`);
+                    font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                }
+                
+                // Ajusta o tamanho da fonte com base na altura da caixa.
+                // O 0.7 é um fator empírico para que o texto caiba bem na altura.
+                const fontSize = finalPdfHeight * 0.7; 
+
+                page.drawText(signatureContent, { // Usa signatureContent para o texto
+                    x: finalPdfX,
+                    y: finalPdfY,
+                    font,
+                    size: fontSize,
+                    color: rgb(0, 0, 0), // Cor preta padrão
+                });
+                console.log(`Assinatura de texto "${signatureContent.substring(0, Math.min(signatureContent.length, 20))}..." adicionada à página ${pageIndex + 1}.`);
+            }
         }
-
-        const { width: pageWidth, height: pageHeight } = firstPage.getSize();
-
-        // 4. Calcular as coordenadas finais para o pdf-lib
-        // Lembre-se: pdf-lib usa coordenadas com origem no canto INFERIOR esquerdo
-        // O frontend usa origem no canto SUPERIOR esquerdo.
-        // A escala de renderização do frontend é 1.5.
-        const frontendRenderScale = 1.5; 
-
-        const signatureX = signatureData.x;
-        const signatureY = signatureData.y;
-        const signatureWidth = signatureData.width;
-        const signatureHeight = signatureData.height;
-        const signatureText = signatureData.text; // O texto da assinatura
-
-        // Ajusta as coordenadas do frontend (pixels na tela) para pontos do PDF
-        // e inverte o eixo Y para a convenção do pdf-lib.
-        const finalPdfX = signatureX / frontendRenderScale;
-        const finalPdfWidth = signatureWidth / frontendRenderScale;
-        // Calcula a posição Y no PDF (origem inferior esquerda)
-        // signatureY é a distância do topo da página no frontend.
-        // signatureHeight é a altura da caixa de assinatura no frontend.
-        // pageHeight é a altura da página do PDF em pontos.
-        const finalPdfY = pageHeight - (signatureY / frontendRenderScale + signatureHeight / frontendRenderScale);
-        const finalPdfHeight = signatureHeight / frontendRenderScale;
-
-
-        console.log('Backend - Coordenadas originais do frontend (pixels na tela):', { x: signatureX, y: signatureY, width: signatureWidth, height: signatureHeight, pageIndex: signatureData.pageIndex });
-        console.log('Backend - Coordenadas FINAIS para pdf-lib (pontos do PDF):', { x: finalPdfX, y: finalPdfY, width: finalPdfWidth, height: finalPdfHeight, pageIndex: signatureData.pageIndex });
-
-
-        // 5. Adicionar a assinatura ao PDF
-        // Usar uma fonte padrão que suporte caracteres variados
-        const font = await pdfDoc.embedFont(StandardFonts.Helvetica); // Ou Helvetica-Bold, Times-Roman, etc.
-
-        firstPage.drawText(signatureText, {
-            x: finalPdfX + 2, // Pequeno ajuste para não ficar colado na borda da caixa
-            y: finalPdfY + 2, // Pequeno ajuste
-            font,
-            size: finalPdfHeight * 0.7, // Ajusta o tamanho da fonte para caber na caixa
-            color: rgb(0, 0, 0), // Cor preta
-        });
-
-        // Opcional: Desenhar um retângulo para visualizar a área da assinatura (para depuração)
-        // firstPage.drawRectangle({
-        //     x: finalPdfX,
-        //     y: finalPdfY,
-        //     width: finalPdfWidth,
-        //     height: finalPdfHeight,
-        //     borderColor: rgb(1, 0, 0), // Vermelho
-        //     borderWidth: 1,
-        // });
-
-        // 6. Salvar o PDF modificado
+        
+        // 5. Salvar o PDF modificado
         const modifiedPdfBytes = await pdfDoc.save();
-        console.log('PDF modificado com a assinatura.');
+
+        // 6. Preparar o nome do arquivo para upload
+        const fileNameWithoutExtension = originalFileName.substring(0, originalFileName.lastIndexOf('.'));
+        const timestamp = Date.now();
+        const signedFileName = `${fileNameWithoutExtension}_ASSINADO_${signedByCpf}_${timestamp}.pdf`;
+        const fileUpload = bucket.file(`documents/signed/${signedFileName}`);
 
         // 7. Fazer upload do PDF assinado para o Firebase Storage
-        const bucket = storage.bucket();
-        const signedFileName = `signed_${Date.now()}_${originalFileName}`;
-        const fileUpload = bucket.file(signedFileName);
-
         // Cria um stream a partir do buffer para o upload
         const bufferStream = new Readable();
         bufferStream.push(Buffer.from(modifiedPdfBytes));
@@ -194,9 +235,6 @@ export default async function handler(req, res) {
 
     } catch (error) {
         console.error('Erro ao assinar documento:', error);
-        res.status(500).json({ 
-            error: 'Internal Server Error', 
-            details: error.message,
-        });
+        res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
 }

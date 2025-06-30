@@ -8,6 +8,9 @@
     <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.6.11/firebase-firestore-compat.js"></script>
     
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Pacifico&family=Caveat:wght@400;700&display=swap" rel="stylesheet">
+    
     <style>
         /* Base para HTML e Body */
         html, body {
@@ -75,12 +78,23 @@
             border-radius: 4px;
             font-size: 0.9em;
             background-color: white;
+            /* Garante que o nome da fonte apareça no estilo dela */
+            font-family: var(--selected-font-family, sans-serif); 
         }
+        #font-style-select option {
+            font-family: inherit; /* Herda do pai para aplicar a fonte da option */
+        }
+        #font-style-select option[value="Dancing Script"] { font-family: 'Dancing Script', cursive; }
+        #font-style-select option[value="Great Vibes"] { font-family: 'Great Vibes', cursive; }
+        #font-style-select option[value="Pacifico"] { font-family: 'Pacifico', cursive; }
+        #font-style-select option[value="Caveat"] { font-family: 'Caveat', cursive; }
+        #font-style-select option[value="sans-serif"] { font-family: sans-serif; }
+
 
         /* Seção de Assinaturas Salvas */
         #saved-signatures-container {
             position: fixed;
-            top: 80px; /* Abaixo da toolbar */
+            top: var(--toolbar-height, 80px); /* Abaixo da toolbar */
             left: 0;
             width: 100%;
             background-color: #f8f9fa;
@@ -101,6 +115,7 @@
             margin: 0;
             color: #343a40;
             font-size: 1em;
+            white-space: nowrap; /* Evita quebra de linha */
         }
         #saved-signatures-list {
             display: flex;
@@ -140,21 +155,23 @@
             border: 2px solid #28a745; /* Cor de destaque para assinatura selecionada */
             box-shadow: 0 0 8px rgba(40, 167, 69, 0.4);
         }
+        /* Botão de exclusão para Assinaturas Salvas (na lista) */
         .saved-signature-item .delete-saved-sig-btn {
             position: absolute;
-            top: -5px;
-            right: -5px;
-            background-color: #dc3545;
+            top: -10px; /* Mais para fora */
+            right: -10px; /* Mais para fora */
+            background-color: #dc3545; /* Vermelho padrão de erro */
             color: white;
             border-radius: 50%;
-            width: 20px;
-            height: 20px;
+            width: 28px; /* ligeiramente menor que o do PDF, mas ainda visível */
+            height: 28px; /* ligeiramente menor que o do PDF, mas ainda visível */
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 0.8em;
+            font-size: 1em; /* Ícone um pouco maior */
             cursor: pointer;
-            border: 1px solid white;
+            border: 2px solid white; /* Borda branca para destacar */
+            box-shadow: 0 2px 5px rgba(0,0,0,0.3); /* Sombra para destaque */
             z-index: 2;
         }
         .saved-signature-item.text-signature {
@@ -182,12 +199,7 @@
             border-radius: 8px; 
 
             /* Altura dinâmica com calc() para compensar barras fixas e margens */
-            height: calc(100vh - var(--toolbar-height, 80px) - var(--saved-sigs-height, 0px) - var(--controls-height, 80px) - 20px); /* Ajuste com as novas vars */
-            margin-top: var(--toolbar-height, 80px); /* Empurra para baixo para não ser coberto pela toolbar */
-            /* Margin top deve ser a altura da toolbar + altura da saved-signatures-container */
-            /* A altura da saved-signatures-container é variável, precisaremos de JS para isso ou um calc mais inteligente */
-            /* Por enquanto, vamos estimar 80px de toolbar + 70px de saved-signatures (min-height) = 150px */
-            /* E 80px de controls */
+            height: calc(100vh - var(--toolbar-height, 80px) - var(--saved-sigs-height, 0px) - var(--controls-height, 80px) - 20px); 
             margin-top: calc(var(--toolbar-height, 80px) + var(--saved-sigs-height, 0px)); /* Altura total do topo */
             margin-bottom: var(--controls-height, 80px); /* Empurra para cima para não ser coberto pelos controls */
         }
@@ -197,6 +209,7 @@
             --toolbar-height: 80px; /* Altura inicial da toolbar, pode ser ajustada */
             --saved-sigs-height: 0px; /* Será definida via JS */
             --controls-height: 80px; /* Altura inicial dos controles, pode ser ajustada */
+            --selected-font-family: sans-serif; /* Variável para a fonte selecionada */
         }
 
         @media (max-width: 600px) {
@@ -243,23 +256,23 @@
             object-fit: contain;
         }
 
-        /* Botão de Exclusão para Elementos Selecionados */
+        /* Botão de Exclusão para Elementos Selecionados (no PDF) */
         .delete-element-btn {
             position: absolute;
-            top: -10px; 
-            right: -10px;
-            background-color: #dc3545;
+            top: -20px; /* Mais para fora do canto superior */
+            right: -20px; /* Mais para fora do canto direito */
+            background-color: #dc3545; /* Vermelho padrão de erro */
             color: white;
             border-radius: 50%;
-            width: 25px;
-            height: 25px;
+            width: 30px; /* Aumenta o tamanho */
+            height: 30px; /* Aumenta o tamanho */
             display: flex;
             justify-content: center;
             align-items: center;
-            font-size: 1.2em;
+            font-size: 1.1em; /* Ícone um pouco maior */
             cursor: pointer;
-            border: 2px solid white;
-            box-shadow: 0 0 5px rgba(0,0,0,0.3);
+            border: 2px solid white; /* Borda branca para destacar */
+            box-shadow: 0 2px 8px rgba(0,0,0,0.4); /* Sombra mais forte */
             z-index: 10; 
             display: none; /* Inicia oculto */
         }
@@ -454,7 +467,6 @@
             100% { transform: rotate(360deg); }
         }
     </style>
-    <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@400;700&family=Great+Vibes&family=Pacifico&family=Caveat:wght@400;700&display=swap" rel="stylesheet">
 </head>
 <body>
     <div id="toolbar">
@@ -576,13 +588,16 @@
         // Event listener para o seletor de fonte
         fontStyleSelect.addEventListener('change', (e) => {
             currentSignatureFont = e.target.value;
+            // Atualiza a variável CSS para que as opções do select reflitam a fonte
+            document.documentElement.style.setProperty('--selected-font-family', currentSignatureFont);
             // Atualiza a fonte da ghost preview se estiver ativa
             if (isPlacingSignature && currentSignatureType === 'text') {
                 ghostSignaturePreview.style.fontFamily = currentSignatureFont;
             }
         });
-        // Define a fonte inicial
+        // Define a fonte inicial e atualiza a variável CSS
         currentSignatureFont = fontStyleSelect.value;
+        document.documentElement.style.setProperty('--selected-font-family', currentSignatureFont);
 
 
         auth.onAuthStateChanged(async (user) => {
@@ -714,10 +729,10 @@
                     newSigEl.dataset.signatureId = sigEl.id; 
                     makeDraggableAndResizable(newSigEl, sigEl);
 
-                    // Adiciona botão de exclusão
+                    // Adiciona botão de exclusão com ícone
                     const deleteBtn = document.createElement('div');
                     deleteBtn.className = 'delete-element-btn';
-                    deleteBtn.textContent = 'X';
+                    deleteBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>'; // Ícone de lixeira
                     deleteBtn.title = 'Excluir Elemento';
                     deleteBtn.addEventListener('click', (e) => {
                         e.stopPropagation(); 
@@ -764,9 +779,13 @@
         drawSignatureBtn.addEventListener('click', () => {
             signatureModal.style.display = 'flex';
             // Definir dimensões do signaturePad ao abrir o modal
-            signaturePad.width = signaturePad.offsetWidth;
-            signaturePad.height = signaturePad.offsetHeight;
-            clearSignaturePad();
+            // Usamos setTimeout para garantir que o modal tenha sido renderizado e tenha offsetWidth/Height corretos
+            setTimeout(() => {
+                signaturePad.width = signaturePad.offsetWidth;
+                signaturePad.height = signaturePad.offsetHeight;
+                clearSignaturePad();
+            }, 0);
+            
             signDocumentBtn.disabled = true; // Desabilita enquanto o modal de assinatura está aberto
             // Remove seleção de assinatura salva
             if (selectedSavedSignatureId) {
@@ -789,18 +808,26 @@
             currentSignatureToAdd = signaturePad.toDataURL('image/png'); // Já é transparente por padrão agora
             currentSignatureType = 'drawing';
             console.log('Assinatura desenhada (Base64 parcial):', currentSignatureToAdd.substring(0, 50) + '...');
-            signatureModal.style.display = 'none';
+            
+            signatureModal.style.display = 'none'; // Fecha o modal AQUI
             isPlacingSignature = true;
             pdfViewerContainer.style.cursor = 'copy';
 
+            // --- NOVO: Configura e exibe o ghostSignaturePreview IMEDIATAMENTE ---
             ghostSignaturePreview.style.display = 'flex';
             ghostSignaturePreview.innerHTML = '';
             const img = document.createElement('img');
             img.src = currentSignatureToAdd;
             ghostSignaturePreview.appendChild(img);
-            ghostSignaturePreview.style.width = '150px'; 
-            ghostSignaturePreview.style.height = '75px'; 
+            ghostSignaturePreview.style.width = '150px'; // Ou um tamanho padrão para início
+            ghostSignaturePreview.style.height = '75px'; // Ou um tamanho padrão para início
             ghostSignaturePreview.style.fontFamily = 'sans-serif'; // Reset para imagens
+            
+            // Tenta centralizar ou posicionar na área visível do container
+            const containerRect = pdfViewerContainer.getBoundingClientRect();
+            ghostSignaturePreview.style.left = `${containerRect.width / 2 - parseFloat(ghostSignaturePreview.style.width) / 2}px`;
+            ghostSignaturePreview.style.top = `${containerRect.height / 2 - parseFloat(ghostSignaturePreview.style.height) / 2}px`;
+            // --- FIM NOVO ---
         });
 
         // Event listener para salvar a assinatura desenhada
@@ -919,6 +946,10 @@
             currentSignatureToAdd = null; 
             currentSignatureType = null;
             currentSignatureFont = null;
+            
+            // Desseleciona a assinatura salva se uma nova foi adicionada manualmente
+            document.querySelectorAll('.saved-signature-item').forEach(el => el.classList.remove('selected-saved'));
+            selectedSavedSignatureId = null;
         });
 
         function selectElement(element) {
@@ -990,8 +1021,10 @@
                 e.preventDefault();
                 isDragging = true;
                 selectElement(element); 
-                startX = e.clientX - element.getBoundingClientRect().left; 
-                startY = e.clientY - element.getBoundingClientRect().top;
+                // Calcula as coordenadas do clique em relação ao elemento, não à página
+                const rect = element.getBoundingClientRect();
+                startX = e.clientX - rect.left; 
+                startY = e.clientY - rect.top;
 
                 element.style.cursor = 'grabbing';
             });
@@ -1008,9 +1041,11 @@
 
             pdfViewerContainer.addEventListener('mousemove', e => {
                 if (isDragging) {
-                    const mouseX = e.clientX - pdfViewerContainer.getBoundingClientRect().left;
-                    const mouseY = e.clientY - pdfViewerContainer.getBoundingClientRect().top;
+                    const rectContainer = pdfViewerContainer.getBoundingClientRect();
+                    const mouseX = e.clientX - rectContainer.left;
+                    const mouseY = e.clientY - rectContainer.top;
 
+                    // As coordenadas newLeft/newTop devem ser relativas ao container rolável
                     const newLeft = mouseX - startX + pdfViewerContainer.scrollLeft;
                     const newTop = mouseY - startY + pdfViewerContainer.scrollTop;
                     
@@ -1075,9 +1110,9 @@
             pdfViewerContainer.addEventListener('touchmove', e => {
                 if (isDragging) {
                     const touch = e.touches[0];
-                    const rect = pdfViewerContainer.getBoundingClientRect();
-                    const touchX = touch.clientX - rect.left;
-                    const touchY = touch.clientY - rect.top;
+                    const rectContainer = pdfViewerContainer.getBoundingClientRect();
+                    const touchX = touch.clientX - rectContainer.left;
+                    const touchY = touch.clientY - rectContainer.top;
 
                     const newLeft = touchX - startX + pdfViewerContainer.scrollLeft;
                     const newTop = touchY - startY + pdfViewerContainer.scrollTop;
@@ -1169,7 +1204,7 @@
             signaturePadContext.lineWidth = 2;
             signaturePadContext.lineCap = 'round';
             signaturePadContext.lineJoin = 'round';
-            // signaturePadContext.fillStyle = '#fff'; // REMOVIDO: Para garantir fundo transparente ao exportar
+            // REMOVIDO: signaturePadContext.fillStyle = '#fff'; // Para garantir fundo transparente ao exportar
             
             clearSignaturePad(); 
         }
@@ -1193,6 +1228,7 @@
 
         signaturePad.addEventListener('touchmove', e => {
             e.preventDefault(); 
+            if (!isDrawingPad) return; // Garante que só desenha se o toque começou no pad
             const touch = e.touches[0];
             const rect = signaturePad.getBoundingClientRect();
             drawPad({offsetX: touch.clientX - rect.left, offsetY: touch.clientY - rect.top});
@@ -1212,7 +1248,7 @@
 
         function clearSignaturePad() {
             signaturePadContext.clearRect(0, 0, signaturePad.width, signaturePad.height);
-            // signaturePadContext.fillRect(0, 0, signaturePad.width, signaturePad.height); // REMOVIDO
+            // REMOVIDO: signaturePadContext.fillRect(0, 0, signaturePad.width, signaturePad.height); // Para garantir fundo transparente ao exportar
             signaturePadContext.strokeStyle = '#000'; 
             signaturePadContext.lineWidth = 2;
         }
@@ -1307,10 +1343,10 @@
                 }
             });
 
-            // Botão de deletar assinatura salva
+            // Botão de deletar assinatura salva com ícone
             const deleteSavedBtn = document.createElement('div');
             deleteSavedBtn.className = 'delete-saved-sig-btn';
-            deleteSavedBtn.textContent = 'X';
+            deleteSavedBtn.innerHTML = '<i class="fa-solid fa-trash-can"></i>'; // Ícone de lixeira
             deleteSavedBtn.title = 'Excluir assinatura salva';
             deleteSavedBtn.addEventListener('click', async (e) => {
                 e.stopPropagation();
@@ -1349,7 +1385,7 @@
             
             signDocumentBtn.disabled = true; 
             signDocumentBtn.textContent = 'Assinando... Por favor, aguarde.'; 
-            loadingSpinner.style.display = 'flex'; 
+            showLoadingSpinner('Gerando documento assinado...'); // Usar showLoadingSpinner
 
             try {
                 const user = auth.currentUser;
@@ -1378,6 +1414,11 @@
                     
                     const pdfYFromTopPx = sigEl.y; 
                     
+                    // Ajuste da coordenada Y: PDF.js usa origem no canto inferior esquerdo.
+                    // O `sigEl.y` é a coordenada Y do topo do elemento relativo ao topo do canvas.
+                    // A altura do elemento é `sigEl.height`.
+                    // A altura do canvas renderizado é `pdfCanvasHeight`.
+                    // Convertemos para a escala do PDF e invertemos a Y.
                     const pdfY = (pdfCanvasHeight - (pdfYFromTopPx + sigEl.height)) / scale; 
                     
                     console.log(`Conversão para PDF (Element ID: ${sigEl.id}):`);
@@ -1406,9 +1447,9 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        documentId: currentDocumentId,
-                        signatures: signaturesToSend, 
-                        userCPF: userCPF
+                    documentId: currentDocumentId,
+                    signatureData: signaturesToSend, // Agora corresponde ao backend
+                    signedByCpf: userCPF // Agora corresponde ao backend
                     })
                 });
 
@@ -1427,7 +1468,7 @@
             } finally {
                 signDocumentBtn.disabled = false;
                 signDocumentBtn.textContent = 'Assinar Documento Agora';
-                loadingSpinner.style.display = 'none'; 
+                hideLoadingSpinner(); 
             }
         });
 
