@@ -145,12 +145,6 @@
             border-color: #007bff;
             box-shadow: 0 0 5px rgba(0, 123, 255, 0.2);
         }
-        .saved-signature-item img {
-            max-width: 100%;
-            max-height: 60px; /* Ajuste se necessário para o desenho */
-            object-fit: contain;
-            display: block;
-        }
         .saved-signature-item.selected-saved {
             border: 2px solid #28a745; /* Cor de destaque para assinatura selecionada */
             box-shadow: 0 0 8px rgba(40, 167, 69, 0.4);
@@ -867,17 +861,24 @@
         });
 
 
+        // --- INÍCIO DA CORREÇÃO DE CÓDIGO ---
+        // Ajuste a lógica de posicionamento da ghostSignaturePreview para considerar a rolagem
         pdfViewerContainer.addEventListener('mousemove', (event) => {
             if (isPlacingSignature) {
                 const rect = pdfViewerContainer.getBoundingClientRect();
-                const mouseX = event.clientX - rect.left;
-                const mouseY = event.clientY - rect.top;
+                // Calcule a posição do mouse em relação ao topo/esquerda do *conteúdo rolável*
+                const mouseX = event.clientX - rect.left + pdfViewerContainer.scrollLeft;
+                const mouseY = event.clientY - rect.top + pdfViewerContainer.scrollTop;
 
                 const previewWidth = parseFloat(ghostSignaturePreview.style.width);
                 const previewHeight = parseFloat(ghostSignaturePreview.style.height);
 
                 ghostSignaturePreview.style.left = `${mouseX - previewWidth / 2}px`;
                 ghostSignaturePreview.style.top = `${mouseY - previewHeight / 2}px`;
+
+                // DEBUG: Log para verificar a posição da ghost preview
+                console.log(`DEBUG Ghost Preview: MouseX (scrolled): ${mouseX.toFixed(2)}, MouseY (scrolled): ${mouseY.toFixed(2)}`);
+                console.log(`DEBUG Ghost Preview: Left: ${ghostSignaturePreview.style.left}, Top: ${ghostSignaturePreview.style.top}`);
             }
         });
 
@@ -886,16 +887,23 @@
                 event.preventDefault(); 
                 const touch = event.touches[0];
                 const rect = pdfViewerContainer.getBoundingClientRect();
-                const touchX = touch.clientX - rect.left;
-                const touchY = touch.clientY - rect.top;
+                // Calcule a posição do toque em relação ao topo/esquerda do *conteúdo rolável*
+                const touchX = touch.clientX - rect.left + pdfViewerContainer.scrollLeft;
+                const touchY = touch.clientY - rect.top + pdfViewerContainer.scrollTop;
 
                 const previewWidth = parseFloat(ghostSignaturePreview.style.width);
                 const previewHeight = parseFloat(ghostSignaturePreview.style.height);
 
                 ghostSignaturePreview.style.left = `${touchX - previewWidth / 2}px`;
                 ghostSignaturePreview.style.top = `${touchY - previewHeight / 2}px`;
+
+                // DEBUG: Log para verificar a posição da ghost preview em touch
+                console.log(`DEBUG Ghost Preview (Touch): TouchX (scrolled): ${touchX.toFixed(2)}, TouchY (scrolled): ${touchY.toFixed(2)}`);
+                console.log(`DEBUG Ghost Preview (Touch): Left: ${ghostSignaturePreview.style.left}, Top: ${ghostSignaturePreview.style.top}`);
             }
         }, { passive: false }); 
+        // --- FIM DA CORREÇÃO DE CÓDIGO ---
+
 
         pdfViewerContainer.addEventListener('click', (event) => {
             const clickedElement = event.target.closest('.signature-element');
@@ -912,6 +920,7 @@
             if (!isPlacingSignature || !currentSignatureToAdd) return;
 
             const rect = pdfViewerContainer.getBoundingClientRect();
+            // Estes cálculos já estão corretos, pois incluem o scroll
             const clickX = event.clientX - rect.left + pdfViewerContainer.scrollLeft;
             const clickY = event.clientY - rect.top + pdfViewerContainer.scrollTop;
 
@@ -950,6 +959,9 @@
             // Desseleciona a assinatura salva se uma nova foi adicionada manualmente
             document.querySelectorAll('.saved-signature-item').forEach(el => el.classList.remove('selected-saved'));
             selectedSavedSignatureId = null;
+
+            // DEBUG: Log para verificar as coordenadas finais da assinatura adicionada
+            console.log('DEBUG: Assinatura adicionada ao addedSignatureElements:', newSignature);
         });
 
         function selectElement(element) {
@@ -1402,55 +1414,42 @@
                     return; 
                 }
 
-                const signaturesToSend = await Promise.all(addedSignatureElements.map(async (sigEl) => {
-                    const page = await pdfDoc.getPage(sigEl.pageNum); 
-                    const scale = 1.5; 
+                // Vamos pegar o primeiro elemento de addedSignatureElements
+                const signatureToProcess = addedSignatureElements[0]; 
 
-                    const pdfCanvasHeight = pdfCanvas.height; 
+                if (!signatureToProcess) {
+                    alert('Nenhuma assinatura para processar. Por favor, adicione uma assinatura.');
+                    return;
+                }
 
-                    const pdfX = sigEl.x / scale; 
-                    const pdfWidth = sigEl.width / scale; 
-                    const pdfHeight = sigEl.height / scale; 
-                    
-                    const pdfYFromTopPx = sigEl.y; 
-                    
-                    // Ajuste da coordenada Y: PDF.js usa origem no canto inferior esquerdo.
-                    // O `sigEl.y` é a coordenada Y do topo do elemento relativo ao topo do canvas.
-                    // A altura do elemento é `sigEl.height`.
-                    // A altura do canvas renderizado é `pdfCanvasHeight`.
-                    // Convertemos para a escala do PDF e invertemos a Y.
-                    const pdfY = (pdfCanvasHeight - (pdfYFromTopPx + sigEl.height)) / scale; 
-                    
-                    console.log(`Conversão para PDF (Element ID: ${sigEl.id}):`);
-                    console.log(`  - Original PDF Height (pts): ${page.originalHeight}`);
-                    console.log(`  - Visual X (px): ${sigEl.x}, Visual Y (px): ${sigEl.y}, Visual W (px): ${sigEl.width}, Visual H (px): ${sigEl.height}`);
-                    console.log(`  - Canvas Render Height (px): ${pdfCanvasHeight}`);
-                    console.log(`  - Converted PDF X (pts): ${pdfX.toFixed(2)}, PDF Y (pts, bottom-left origin): ${pdfY.toFixed(2)}, PDF W (pts): ${pdfWidth.toFixed(2)}, PDF H (pts): ${pdfHeight.toFixed(2)}`);
+                // Certifique-se de que o pageNum está correto antes de usar
+                if (signatureToProcess.pageNum === undefined || signatureToProcess.pageNum < 1) {
+                    console.error('Erro: signatureToProcess.pageNum é inválido ou indefinido:', signatureToProcess.pageNum);
+                    alert('Erro interno: Número da página da assinatura inválido. Por favor, tente novamente.');
+                    return;
+                }
 
-                    return {
-                        x: pdfX,
-                        y: pdfY, 
-                        width: pdfWidth,
-                        height: pdfHeight,
-                        pageNum: sigEl.pageNum, 
-                        type: sigEl.type,
-                        content: sigEl.content,
-                        fontFamily: sigEl.fontFamily || null // Inclui a fonte para o backend, se houver
-                    };
-                }));
-
-                console.log("Dados de assinatura para enviar ao backend (após conversão):", signaturesToSend);
+                // --- INÍCIO DA ALTERAÇÃO NO FRONTEND ---
+                // Enviando as coordenadas do elemento em PIXELS (do canvas) para o backend
+                const dataToSend = {
+                    documentId: currentDocumentId,
+                    canvasX: signatureToProcess.x, // Coordenada X em pixels
+                    canvasY: signatureToProcess.y, // Coordenada Y em pixels
+                    canvasWidth: signatureToProcess.width, // Largura em pixels
+                    canvasHeight: signatureToProcess.height, // Altura em pixels
+                    signaturePage: signatureToProcess.pageNum, // Enviando 1-based para o backend
+                    userCPF: userCPF,
+                    signatureImage: signatureToProcess.content // O Base64 da imagem ou texto
+                };
+                console.log('DEBUG Frontend: Dados de assinatura a serem enviados ao backend (dataToSend):', dataToSend);
+                // --- FIM DA ALTERAÇÃO NO FRONTEND ---
 
                 const response = await fetch('/api/sign-document', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                    documentId: currentDocumentId,
-                    signatureData: signaturesToSend, // Agora corresponde ao backend
-                    signedByCpf: userCPF // Agora corresponde ao backend
-                    })
+                    body: JSON.stringify(dataToSend)
                 });
 
                 if (!response.ok) {
