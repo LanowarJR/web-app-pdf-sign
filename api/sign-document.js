@@ -9,7 +9,7 @@ import axios from 'axios'; // Usando axios para baixar o PDF
 import { Readable } from 'stream'; // Para lidar com streams de buffer
 import { promisify } from 'util'; // Para promisificar stream.pipeline
 import { pipeline } from 'stream';
-
+ 
 const pipelineAsync = promisify(pipeline);
 
 // Configuração para desativar o body-parser padrão do Next.js (ou Vercel) para lidar com JSON bruto
