@@ -137,6 +137,8 @@ export default async function handler(req, res) {
 
                 const docRef = await db.collection('documents').add({
                     nome_arquivo_original: originalFileName,
+                    nome_arquivo_unico: uniqueFileName,
+                    path_original: destinationPath,
                     url_original: url, 
                     uploaded_by_cpf: cpf, // O CPF extraído do nome do arquivo
                     upload_date: new Date(),

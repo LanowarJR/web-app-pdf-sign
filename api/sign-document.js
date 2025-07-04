@@ -5,7 +5,6 @@ import { initializeApp, cert } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getStorage } from 'firebase-admin/storage';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import axios from 'axios'; // Usando axios para baixar o PDF
 import { Readable } from 'stream'; // Para lidar com streams de buffer
 import { promisify } from 'util'; // Para promisificar stream.pipeline
 import { pipeline } from 'stream';
@@ -62,7 +61,8 @@ export default async function handler(req, res) {
             canvasWidth, // Width on the frontend canvas (pixels)
             canvasHeight, // Height on the frontend canvas (pixels)
             signaturePage, // This is the page number (1-based)
-            userCPF,
+            renderScale, // A escala de renderização calculada no frontend
+            userCPF, 
             signatureImage // Base64 image data
         } = req.body;
 
@@ -72,18 +72,19 @@ export default async function handler(req, res) {
             canvasY,
             canvasWidth,
             canvasHeight,
-            signaturePage,
+            signaturePage, 
+            renderScale, // Log da nova variável
             userCPF: userCPF ? userCPF.substring(0, 5) + '...' : 'N/A', // Log parcial do CPF
             signatureImage: signatureImage ? signatureImage.substring(0, 50) + '...' : 'N/A' // Log parcial da imagem
         });
 
         // Validação básica dos campos obrigatórios
         if (!documentId || canvasX === undefined || canvasY === undefined ||
-            canvasWidth === undefined || canvasHeight === undefined ||
+            canvasWidth === undefined || canvasHeight === undefined || !renderScale ||
             signaturePage === undefined || !userCPF || !signatureImage) {
             console.error('Campos obrigatórios ausentes ou indefinidos para a assinatura.');
             return res.status(400).json({
-                error: 'Missing or invalid documentId, canvasX, canvasY, canvasWidth, canvasHeight, signaturePage, userCPF, or signatureImage.'
+                error: 'Missing or invalid documentId, canvasX, canvasY, canvasWidth, canvasHeight, renderScale, signaturePage, userCPF, or signatureImage.'
             });
         }
 
@@ -97,19 +98,23 @@ export default async function handler(req, res) {
         }
 
         const docData = docSnap.data();
-        const originalPdfUrl = docData.url_original;
+
+        // --- VERIFICAÇÃO MAIS ROBUSTA ---
+        // Verifica se os dados do documento e os campos essenciais existem antes de prosseguir.
+        if (!docData || !docData.path_original || !docData.nome_arquivo_original) {
+            console.error(`Documento ${documentId} está malformado ou não contém os campos necessários. Dados recebidos:`, docData);
+            return res.status(400).json({ error: 'Dados do documento estão incompletos no Firestore. Falta path_original ou nome_arquivo_original.' });
+        }
+
+        const originalFilePath = docData.path_original;
         const originalFileName = docData.nome_arquivo_original;
 
-        if (!originalPdfUrl) {
-            console.error('URL do PDF original não encontrada no documento do Firestore para ID:', documentId);
-            return res.status(400).json({ error: 'URL do PDF original não encontrada no documento do Firestore.' });
-        }
-        console.log('URL original do PDF obtida:', originalPdfUrl.substring(0, 50) + '...');
+        console.log('Caminho do PDF original obtido:', originalFilePath);
 
-        // 2. Baixar o PDF original usando axios
-        const response = await axios.get(originalPdfUrl, { responseType: 'arraybuffer' });
-        const existingPdfBytes = response.data;
-        console.log('PDF original baixado com sucesso.');
+        // 2. Baixar o PDF original diretamente do bucket do Firebase Storage
+        const [fileContents] = await bucket.file(originalFilePath).download();
+        const existingPdfBytes = fileContents;
+        console.log('PDF original baixado diretamente do Storage com sucesso.');
 
         // 3. Carregar o PDF com pdf-lib
         const pdfDoc = await PDFDocument.load(existingPdfBytes);
@@ -138,23 +143,23 @@ export default async function handler(req, res) {
 
         // --- CÁLCULO DE COORDENADAS NO BACKEND ---
         // A escala de renderização que o frontend usa para exibir o PDF no canvas.
-        // 1 pixel no canvas do frontend = 1/1.5 pontos no PDF original.
-        const frontendRenderScale = 1.5; 
+        // AGORA RECEBEMOS ESTE VALOR DO FRONTEND PARA PRECISÃO MÁXIMA.
+        const frontendRenderScale = renderScale; 
 
         // Converte as coordenadas e dimensões de PIXELS do canvas do frontend para PONTOS do PDF original.
         // Coordenada X: simples divisão pela escala.
-        const finalPdfX = canvasX / frontendRenderScale;
-        const finalPdfWidth = canvasWidth / frontendRenderScale;
-        const finalPdfHeight = canvasHeight / frontendRenderScale;
+        const finalPdfX = canvasX * frontendRenderScale;
+        const finalPdfWidth = canvasWidth * frontendRenderScale;
+        const finalPdfHeight = canvasHeight * frontendRenderScale;
         
         // Coordenada Y:
         // O frontend (canvas) mede Y a partir do topo da página (top-left origin).
         // O pdf-lib mede Y a partir da BASE da página (bottom-left origin).
         // Para converter: (Altura REAL da página PDF em pontos) - (coordenada Y do topo em pixels / escala + altura do elemento em pixels / escala)
-        const finalPdfY = pageHeight - (canvasY / frontendRenderScale + canvasHeight / frontendRenderScale);
+        const finalPdfY = pageHeight - (canvasY * frontendRenderScale + canvasHeight * frontendRenderScale);
 
         console.log('Backend - Coordenadas originais do frontend (em pixels do canvas):', { canvasX, canvasY, canvasWidth, canvasHeight });
-        console.log('Backend - Escala de renderização do frontend:', frontendRenderScale);
+        console.log('Backend - Escala de renderização RECEBIDA do frontend:', frontendRenderScale);
         console.log('Backend - Coordenadas FINAIS para pdf-lib (em pontos, ajustadas para Y do fundo):', {
             x: finalPdfX.toFixed(2),
             y: finalPdfY.toFixed(2),
