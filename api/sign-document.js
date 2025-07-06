@@ -217,17 +217,17 @@ export default async function handler(req, res) {
     const frontendRenderScale = req.body.renderScale; // ou req.body.frontendRenderScale
 
     // Converte as coordenadas e dimensões de PIXELS do canvas do frontend para PONTOS do PDF original.
-    // Coordenada X: simples divisão pela escala.
-    const finalPdfX = canvasX * frontendRenderScale;
-    const finalPdfWidth = canvasWidth * frontendRenderScale;
-    const finalPdfHeight = canvasHeight * frontendRenderScale;
+    // Coordenada X: divisão pela escala para converter pixels escalados de volta para pontos originais.
+    const finalPdfX = canvasX / frontendRenderScale;
+    const finalPdfWidth = canvasWidth / frontendRenderScale;
+    const finalPdfHeight = canvasHeight / frontendRenderScale;
 
     // Coordenada Y:
     // O frontend (canvas) mede Y a partir do topo da página (top-left origin).
     // O pdf-lib mede Y a partir da BASE da página (bottom-left origin).
     // Para converter: (Altura REAL da página PDF em pontos) - (coordenada Y do topo em pixels / escala + altura do elemento em pixels / escala)
     const finalPdfY =
-      pageHeight - (canvasY + canvasHeight) * frontendRenderScale;
+      pageHeight - (canvasY + canvasHeight) / frontendRenderScale;
 
     console.log(
       "Backend - Coordenadas originais do frontend (em pixels do canvas):",
