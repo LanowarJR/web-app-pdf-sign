@@ -1431,13 +1431,16 @@
 
                 // --- INÍCIO DA ALTERAÇÃO NO FRONTEND ---
                 // Enviando as coordenadas do elemento em PIXELS (do canvas) para o backend
+                const scale = 1.5; // Use o mesmo valor usado em renderPage
+                
                 const dataToSend = {
                     documentId: currentDocumentId,
-                    canvasX: signatureToProcess.x, // Coordenada X em pixels
-                    canvasY: signatureToProcess.y, // Coordenada Y em pixels
-                    canvasWidth: signatureToProcess.width, // Largura em pixels
-                    canvasHeight: signatureToProcess.height, // Altura em pixels
-                    signaturePage: signatureToProcess.pageNum, // Enviando 1-based para o backend
+                    canvasX: signatureToProcess.x,
+                    canvasY: signatureToProcess.y,
+                    canvasWidth: signatureToProcess.width,
+                    canvasHeight: signatureToProcess.height,
+                    renderScale: Number(scale), // <-- ADICIONE ESTA LINHA!
+                    signaturePage: signatureToProcess.pageNum,
                     userCPF: userCPF,
                     signatureImage: signatureToProcess.content // O Base64 da imagem ou texto
                 };
