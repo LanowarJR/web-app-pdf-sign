@@ -211,6 +211,29 @@
                 --toolbar-height: 120px; /* Aumenta a altura da toolbar em telas menores */
                 --controls-height: 120px; /* Aumenta a altura dos controles em telas menores */
             }
+            
+            /* Melhora a usabilidade em mobile */
+            .signature-element {
+                min-width: 80px; /* Tamanho mínimo maior para facilitar o toque */
+                min-height: 40px;
+            }
+            
+            .resizer {
+                width: 15px; /* Redimensionadores maiores para mobile */
+                height: 15px;
+            }
+            
+            .delete-element-btn, .delete-saved-sig-btn {
+                width: 35px; /* Botões de exclusão maiores para mobile */
+                height: 35px;
+                font-size: 1.2em;
+            }
+            
+            /* Ghost preview ligeiramente maior em mobile */
+            #ghost-signature-preview {
+                min-width: 100px;
+                min-height: 50px;
+            }
         }
 
 
@@ -573,6 +596,7 @@
         let isPlacingSignature = false; 
         let selectedElement = null; 
         let selectedSavedSignatureId = null; // Para gerenciar assinaturas salvas
+        let currentRenderScale = 1.5; // Escala de renderização atual, atualizada dinamicamente
 
 
         backToListBtn.addEventListener('click', () => {
@@ -678,7 +702,25 @@
 
             currentPage = pageNum;
             const page = await pdfDoc.getPage(pageNum);
-            const scale = 1.5; 
+            
+            // Escala adaptativa para dispositivos móveis
+            const isMobile = window.innerWidth <= 768;
+            const containerWidth = pdfViewerContainer.clientWidth;
+            const baseViewport = page.getViewport({ scale: 1.0 });
+            
+            // Calcula a escala ideal para caber no container
+            const scaleToFit = (containerWidth * 0.9) / baseViewport.width;
+            
+            // Define escala: menor entre a calculada e valores máximos/mínimos
+            const maxScale = isMobile ? 2.0 : 1.5;
+            const minScale = 0.8;
+            const scale = Math.min(Math.max(scaleToFit, minScale), maxScale);
+            
+            console.log(`Renderizando página ${pageNum} - isMobile: ${isMobile}, containerWidth: ${containerWidth}, scaleToFit: ${scaleToFit.toFixed(2)}, scale final: ${scale.toFixed(2)}`);
+            
+            // Armazena a escala atual para usar no envio da assinatura
+            currentRenderScale = scale;
+            
             const viewport = page.getViewport({ scale: scale }); 
 
             pdfCanvas.height = viewport.height;
@@ -1431,7 +1473,7 @@
 
                 // --- INÍCIO DA ALTERAÇÃO NO FRONTEND ---
                 // Enviando as coordenadas do elemento em PIXELS (do canvas) para o backend
-                const scale = 1.5; // Use o mesmo valor usado em renderPage
+                // Usa a escala atual calculada dinamicamente
                 
                 const dataToSend = {
                     documentId: currentDocumentId,
@@ -1439,7 +1481,7 @@
                     canvasY: signatureToProcess.y,
                     canvasWidth: signatureToProcess.width,
                     canvasHeight: signatureToProcess.height,
-                    renderScale: Number(scale), // <-- ADICIONE ESTA LINHA!
+                    renderScale: Number(currentRenderScale), // Usa a escala dinâmica calculada
                     signaturePage: signatureToProcess.pageNum,
                     userCPF: userCPF,
                     signatureImage: signatureToProcess.content // O Base64 da imagem ou texto
