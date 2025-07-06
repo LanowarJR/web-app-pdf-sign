@@ -61,30 +61,31 @@ export default async function handler(req, res) {
   // --- FIM DO NOVO LOG ---
 
   try {
-    // Desestruturando os dados do corpo da requisição
-    // AGORA RECEBEMOS AS COORDENADAS EM PIXELS DO CANVAS DO FRONTEND
+    // NOVO: Receber coordenadas absolutas do canvas do fabric.js
     const {
       documentId,
-      canvasX, // X coordinate on the frontend canvas (pixels, top-left origin)
-      canvasY, // Y coordinate on the frontend canvas (pixels, top-left origin)
-      canvasWidth, // Width on the frontend canvas (pixels)
-      canvasHeight, // Height on the frontend canvas (pixels)
-      signaturePage, // This is the page number (1-based)
-      renderScale, // A escala de renderização calculada no frontend
+      absX, // posição X no canvas (px)
+      absY, // posição Y no canvas (px)
+      absWidth, // largura da assinatura no canvas (px)
+      absHeight, // altura da assinatura no canvas (px)
+      canvasWidth, // largura do canvas (px)
+      canvasHeight, // altura do canvas (px)
+      signaturePage,
       userCPF,
-      signatureImage, // Base64 image data
+      signatureImage,
     } = req.body;
 
     console.log(
       "Dados recebidos do frontend para assinatura (valores principais):",
       {
         documentId,
-        canvasX,
-        canvasY,
+        absX,
+        absY,
+        absWidth,
+        absHeight,
         canvasWidth,
         canvasHeight,
         signaturePage,
-        renderScale, // Log da nova variável
         userCPF: userCPF ? userCPF.substring(0, 5) + "..." : "N/A", // Log parcial do CPF
         signatureImage: signatureImage
           ? signatureImage.substring(0, 50) + "..."
@@ -94,11 +95,12 @@ export default async function handler(req, res) {
 
     console.log("Tipos dos campos recebidos:", {
       documentId: typeof documentId,
-      canvasX: typeof canvasX,
-      canvasY: typeof canvasY,
+      absX: typeof absX,
+      absY: typeof absY,
+      absWidth: typeof absWidth,
+      absHeight: typeof absHeight,
       canvasWidth: typeof canvasWidth,
       canvasHeight: typeof canvasHeight,
-      renderScale: typeof renderScale,
       signaturePage: typeof signaturePage,
       userCPF: typeof userCPF,
       signatureImage: typeof signatureImage,
@@ -107,12 +109,13 @@ export default async function handler(req, res) {
     // Validação básica dos campos obrigatórios
     if (
       !documentId ||
-      canvasX === undefined ||
-      canvasY === undefined ||
-      canvasWidth === undefined ||
-      canvasHeight === undefined ||
-      !renderScale ||
-      signaturePage === undefined ||
+      absX === undefined ||
+      absY === undefined ||
+      absWidth === undefined ||
+      absHeight === undefined ||
+      !canvasWidth ||
+      !canvasHeight ||
+      !signaturePage ||
       !userCPF ||
       !signatureImage
     ) {
@@ -121,7 +124,7 @@ export default async function handler(req, res) {
       );
       return res.status(400).json({
         error:
-          "Missing or invalid documentId, canvasX, canvasY, canvasWidth, canvasHeight, renderScale, signaturePage, userCPF, or signatureImage.",
+          "Missing or invalid documentId, absX, absY, absWidth, absHeight, canvasWidth, canvasHeight, signaturePage, userCPF, or signatureImage.",
       });
     }
 
@@ -202,40 +205,39 @@ export default async function handler(req, res) {
       `Página ${signaturePage} (índice ${pageIndex}) selecionada para assinatura.`
     );
 
-    const pageWidth = page.getWidth(); // Largura REAL da página PDF em pontos
-    const pageHeight = page.getHeight(); // Altura REAL da página PDF em pontos
-    console.log(
-      `Backend - Dimensões da página no pdf-lib: Largura=${pageWidth.toFixed(
-        2
-      )}pt, Altura=${pageHeight.toFixed(2)}pt`
-    );
+    // Obter dimensões reais da página PDF
+    const pageWidth = page.getWidth();
+    const pageHeight = page.getHeight();
 
-    // --- CÁLCULO DE COORDENADAS NO BACKEND ---
-    // A escala de renderização que o frontend usa para exibir o PDF no canvas.
-    // AGORA RECEBEMOS ESTE VALOR DO FRONTEND PARA PRECISÃO MÁXIMA.
+    // Calcular escala entre canvas e PDF
+    const scaleX = pageWidth / canvasWidth;
+    const scaleY = pageHeight / canvasHeight;
 
-    const frontendRenderScale = req.body.renderScale; // ou req.body.frontendRenderScale
-
-    // Converte as coordenadas e dimensões de PIXELS do canvas do frontend para PONTOS do PDF original.
-    // Coordenada X: divisão pela escala para converter pixels escalados de volta para pontos originais.
-    const finalPdfX = canvasX / frontendRenderScale;
-    const finalPdfWidth = canvasWidth / frontendRenderScale;
-    const finalPdfHeight = canvasHeight / frontendRenderScale;
-
-    // Coordenada Y:
-    // O frontend (canvas) mede Y a partir do topo da página (top-left origin).
-    // O pdf-lib mede Y a partir da BASE da página (bottom-left origin).
-    // Para converter: (Altura REAL da página PDF em pontos) - (coordenada Y do topo em pixels / escala + altura do elemento em pixels / escala)
-    const finalPdfY =
-      pageHeight - (canvasY + canvasHeight) / frontendRenderScale;
+    // Converter coordenadas do canvas para pontos do PDF
+    const finalPdfX = absX * scaleX;
+    // Y do PDF-lib é a partir da base, então:
+    const finalPdfY = pageHeight - (absY * scaleY) - (absHeight * scaleY);
+    const finalPdfWidth = absWidth * scaleX;
+    const finalPdfHeight = absHeight * scaleY;
 
     console.log(
       "Backend - Coordenadas originais do frontend (em pixels do canvas):",
-      { canvasX, canvasY, canvasWidth, canvasHeight }
+      { absX, absY, absWidth, absHeight }
     );
     console.log(
-      "Backend - Escala de renderização RECEBIDA do frontend:",
-      frontendRenderScale
+      "Backend - Escala de conversão X usada:", scaleX);
+    console.log(
+      "Backend - Escala de conversão Y usada:", scaleY);
+    console.log(
+      "Backend - Altura real da página PDF usada:", pageHeight);
+    console.log(
+      "Backend - Cálculo detalhado das coordenadas Y (ESCALA REAL):",
+      {
+        pageHeight: pageHeight.toFixed(2),
+        absY_scaled: (absY * pageHeight).toFixed(2),
+        absHeight_scaled: (absHeight * pageHeight).toFixed(2),
+        finalPdfY_calculation: `${pageHeight.toFixed(2)} - ${(absY * pageHeight).toFixed(2)} - ${(absHeight * pageHeight).toFixed(2)} = ${finalPdfY.toFixed(2)}`
+      }
     );
     console.log(
       "Backend - Coordenadas FINAIS para pdf-lib (em pontos, ajustadas para Y do fundo):",
