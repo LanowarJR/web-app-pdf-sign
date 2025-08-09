@@ -327,9 +327,14 @@ router.get('/:id/download', async (req, res) => {
         }
 
         // Extrair o caminho do arquivo da URL do Firebase Storage
-        const urlParts = fileUrl.split('/');
-        const encodedPath = urlParts[urlParts.length - 1].split('?')[0];
-        const filePath = decodeURIComponent(encodedPath);
+        // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
+        const urlMatch = fileUrl.match(/\/([^?]+)(?:\?|$)/);
+        if (!urlMatch) {
+            return res.status(400).json({ error: 'URL do arquivo inválida' });
+        }
+        
+        const filePath = decodeURIComponent(urlMatch[1]);
+        console.log('Tentando acessar arquivo:', filePath);
         
         // Baixar arquivo do Firebase Storage
         const file = bucket.file(filePath);
@@ -416,12 +421,17 @@ router.get('/:id/view', async (req, res) => {
         }
 
         // Extrair o caminho do arquivo da URL do Firebase Storage
-        const urlParts = fileUrl.split('/');
-        const encodedPath = urlParts[urlParts.length - 1].split('?')[0];
-        const filePath = decodeURIComponent(encodedPath);
-        
-        // Gerar URL assinada temporária para visualização
-        const file = bucket.file(filePath);
+         // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
+         const urlMatch = fileUrl.match(/\/([^?]+)(?:\?|$)/);
+         if (!urlMatch) {
+             return res.status(400).json({ error: 'URL do arquivo inválida' });
+         }
+         
+         const filePath = decodeURIComponent(urlMatch[1]);
+         console.log('Tentando visualizar arquivo:', filePath);
+         
+         // Gerar URL assinada temporária para visualização
+         const file = bucket.file(filePath);
         const [url] = await file.getSignedUrl({
             action: 'read',
             expires: Date.now() + 15 * 60 * 1000, // 15 minutos
@@ -467,23 +477,26 @@ router.post('/download-bulk', async (req, res) => {
                     const fileUrl = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
 
                     if (fileUrl) {
-                        // Extrair o caminho do arquivo da URL do Firebase Storage
-                        const urlParts = fileUrl.split('/');
-                        const encodedPath = urlParts[urlParts.length - 1].split('?')[0];
-                        const filePath = decodeURIComponent(encodedPath);
-                        
-                        // Baixar arquivo do Firebase Storage
-                        const file = bucket.file(filePath);
-                        const [exists] = await file.exists();
-                        
-                        if (exists) {
-                            const stream = file.createReadStream();
-                            archive.append(stream, { name: documentData.filename });
-                            addedFiles++;
-                        } else {
-                            console.error(`Arquivo não encontrado no storage: ${filePath}`);
-                        }
-                    }
+                         // Extrair o caminho do arquivo da URL do Firebase Storage
+                         // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
+                         const urlMatch = fileUrl.match(/\/([^?]+)(?:\?|$)/);
+                         if (urlMatch) {
+                             const filePath = decodeURIComponent(urlMatch[1]);
+                             console.log('Download em lote - tentando acessar arquivo:', filePath);
+                             
+                             // Baixar arquivo do Firebase Storage
+                             const file = bucket.file(filePath);
+                             const [exists] = await file.exists();
+                             
+                             if (exists) {
+                                 const stream = file.createReadStream();
+                                 archive.append(stream, { name: documentData.filename });
+                                 addedFiles++;
+                             } else {
+                                 console.error(`Arquivo não encontrado no storage: ${filePath}`);
+                             }
+                         }
+                     }
                 }
             } catch (error) {
                 console.error(`Erro ao processar documento ${docId}:`, error);
