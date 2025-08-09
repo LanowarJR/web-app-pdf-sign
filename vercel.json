@@ -2,26 +2,46 @@
   "version": 2,
   "builds": [
     {
-      "src": "server.js",
+      "src": "api/index.js",
       "use": "@vercel/node"
     }
   ],
   "routes": [
     {
       "src": "/api/(.*)",
-      "dest": "server.js"
+      "dest": "/api/index.js"
+    },
+    {
+      "src": "/",
+      "dest": "/public/login.html"
+    },
+    {
+      "src": "/login.html",
+      "dest": "/public/login.html"
+    },
+    {
+      "src": "/admin-dashboard.html",
+      "dest": "/public/admin-dashboard.html"
+    },
+    {
+      "src": "/admin-pdfjs.html",
+      "dest": "/public/admin-pdfjs.html"
+    },
+    {
+      "src": "/user.html",
+      "dest": "/public/user.html"
+    },
+    {
+      "src": "/sign-pdfjs.html",
+      "dest": "/public/sign-pdfjs.html"
     },
     {
       "src": "/admin",
-      "dest": "/public/login.html"
+      "dest": "/public/admin-pdfjs.html"
     },
     {
       "src": "/admin-dashboard",
       "dest": "/public/admin-dashboard.html"
-    },
-    {
-      "src": "/admin-pdfjs",
-      "dest": "/public/admin-pdfjs.html"
     },
     {
       "src": "/user",
@@ -29,10 +49,6 @@
     },
     {
       "src": "/sign",
-      "dest": "/public/login.html"
-    },
-    {
-      "src": "/sign-pdfjs",
       "dest": "/public/sign-pdfjs.html"
     },
     {
