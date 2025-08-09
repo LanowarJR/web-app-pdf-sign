@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste API Vercel</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 10px;
+            border-radius: 3px;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        pre {
+            background-color: #f8f9fa;
+            padding: 10px;
+            border-radius: 3px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔧 Teste de API - Vercel</h1>
+    
+    <div class="test-section">
+        <h3>1. Teste de Login Admin</h3>
+        <button onclick="testAdminLogin()">Testar Login</button>
+        <div id="loginResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>2. Teste de Autenticação</h3>
+        <button onclick="testAuth()">Testar Token</button>
+        <div id="authResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>3. Teste de Download</h3>
+        <input type="text" id="docId" placeholder="ID do documento" style="margin-right: 10px; padding: 8px;">
+        <button onclick="testDownload()">Testar Download</button>
+        <div id="downloadResult"></div>
+    </div>
+    
+    <div class="test-section">
+        <h3>4. Logs de Debug</h3>
+        <div id="debugLogs"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let currentToken = localStorage.getItem('token');
+        
+        function showResult(elementId, message, isSuccess = true) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = `<div class="result ${isSuccess ? 'success' : 'error'}">${message}</div>`;
+        }
+        
+        function showDebug(data) {
+            const element = document.getElementById('debugLogs');
+            element.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+        }
+        
+        async function testAdminLogin() {
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/admin/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        email: 'admin@exemplo.com',
+                        password: 'minhasenha123'
+                    })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    currentToken = data.token;
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('user', JSON.stringify(data.user));
+                    showResult('loginResult', `✅ Login bem-sucedido! Token: ${data.token.substring(0, 20)}...`);
+                } else {
+                    showResult('loginResult', `❌ Erro no login: ${data.error}`, false);
+                }
+                
+                showDebug({ response: response.status, data });
+                
+            } catch (error) {
+                showResult('loginResult', `❌ Erro de conexão: ${error.message}`, false);
+                showDebug({ error: error.message });
+            }
+        }
+        
+        async function testAuth() {
+            if (!currentToken) {
+                showResult('authResult', '❌ Nenhum token disponível. Faça login primeiro.', false);
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/auth/verify`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('authResult', `✅ Token válido! Usuário: ${JSON.stringify(data.user)}`);
+                } else {
+                    showResult('authResult', `❌ Token inválido: ${data.error}`, false);
+                }
+                
+                showDebug({ response: response.status, data });
+                
+            } catch (error) {
+                showResult('authResult', `❌ Erro de conexão: ${error.message}`, false);
+                showDebug({ error: error.message });
+            }
+        }
+        
+        async function testDownload() {
+            const docId = document.getElementById('docId').value;
+            
+            if (!docId) {
+                showResult('downloadResult', '❌ Digite um ID de documento', false);
+                return;
+            }
+            
+            if (!currentToken) {
+                showResult('downloadResult', '❌ Nenhum token disponível. Faça login primeiro.', false);
+                return;
+            }
+            
+            try {
+                const response = await fetch(`${API_BASE}/api/documents/${docId}/download`, {
+                    headers: {
+                        'Authorization': `Bearer ${currentToken}`
+                    }
+                });
+                
+                if (response.ok) {
+                    const contentType = response.headers.get('content-type');
+                    const contentLength = response.headers.get('content-length');
+                    showResult('downloadResult', `✅ Download OK! Tipo: ${contentType}, Tamanho: ${contentLength} bytes`);
+                } else {
+                    const data = await response.json();
+                    showResult('downloadResult', `❌ Erro no download: ${data.error}`, false);
+                    showDebug({ response: response.status, data });
+                }
+                
+            } catch (error) {
+                showResult('downloadResult', `❌ Erro de conexão: ${error.message}`, false);
+                showDebug({ error: error.message });
+            }
+        }
+        
+        // Verificar se já existe token
+        if (currentToken) {
+            showResult('authResult', `Token encontrado: ${currentToken.substring(0, 20)}...`);
+        }
+    </script>
+</body>
+</html>
