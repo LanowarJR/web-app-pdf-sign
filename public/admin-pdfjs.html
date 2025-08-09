@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin PDF.js - Sistema de Assinatura</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        /* Toast notifications para mobile */
+        .toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 350px;
+        }
+        
+        .toast {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+            margin-bottom: 10px;
+            padding: 16px 20px;
+            border-left: 4px solid #28a745;
+            animation: slideIn 0.3s ease-out;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .toast.error {
+            border-left-color: #dc3545;
+        }
+        
+        .toast.warning {
+            border-left-color: #ffc107;
+        }
+        
+        .toast.info {
+            border-left-color: #17a2b8;
+        }
+        
+        .toast-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        .toast-icon {
+            margin-right: 8px;
+            font-size: 16px;
+        }
+        
+        .toast-body {
+            font-size: 13px;
+            color: #666;
+            line-height: 1.4;
+        }
+        
+        .toast-close {
+            position: absolute;
+            top: 8px;
+            right: 12px;
+            background: none;
+            border: none;
+            font-size: 18px;
+            cursor: pointer;
+            color: #999;
+            padding: 0;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+        
+        .toast.removing {
+            animation: slideOut 0.3s ease-in;
+        }
+        
+        /* Responsivo para mobile */
+        @media (max-width: 768px) {
+            .toast-container {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+            
+            .toast {
+                margin-bottom: 8px;
+                padding: 14px 16px;
+            }
+        }
+
+        /* Mobile First Design */
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .logo {
+            font-size: 1.2rem;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.9rem;
+        }
+
+        .container {
+            padding: 1rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        /* Navigation */
+        .nav-section {
+            background: white;
+            border-radius: 10px;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .nav-tabs {
+            display: flex;
+            background: #f8f9fa;
+            overflow-x: auto;
+        }
+
+        .nav-tab {
+            flex: 1;
+            min-width: 120px;
+            padding: 1rem;
+            text-align: center;
+            background: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+            white-space: nowrap;
+            color: #666;
+        }
+
+        .nav-tab.active {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .nav-tab:hover:not(.active) {
+            background: #e9ecef;
+        }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: bold;
+            color: #333;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Upload Section */
+        .upload-area {
+            border: 2px dashed #ddd;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            margin-bottom: 1rem;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: #f8f9ff;
+        }
+
+        .upload-area.dragover {
+            border-color: #667eea;
+            background: #f0f4ff;
+        }
+
+        .upload-icon {
+            font-size: 3rem;
+            color: #ddd;
+            margin-bottom: 1rem;
+        }
+
+        .upload-text {
+            color: #666;
+            margin-bottom: 1rem;
+        }
+
+        /* PDF Container */
+        .pdf-container {
+            position: relative;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .pdf-viewer {
+            position: relative;
+            width: 100%;
+            height: 70vh;
+            min-height: 400px;
+            overflow: auto;
+            border: 1px solid #ddd;
+            background: #f8f9fa;
+        }
+
+        #pdf-canvas {
+            display: block;
+            margin: 0 auto;
+            cursor: crosshair;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .signature-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .signature-element {
+            position: absolute;
+            background: rgba(0, 255, 0, 0.3);
+            border: 2px solid #28a745;
+            border-radius: 6px;
+            cursor: move;
+            pointer-events: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8rem;
+            font-weight: bold;
+            color: #155724;
+            min-width: 80px;
+            min-height: 30px;
+            transition: all 0.3s ease;
+        }
+
+        .signature-element:hover {
+            background: rgba(0, 255, 0, 0.5);
+            transform: scale(1.05);
+        }
+
+        .signature-element.selected {
+            border-color: #007bff;
+            background: rgba(0, 123, 255, 0.3);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.2);
+        }
+
+        /* Controls */
+        .controls {
+            padding: 1rem;
+            background: #f8f9fa;
+            border-top: 1px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .control-row {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            white-space: nowrap;
+            min-height: 44px; /* Touch-friendly */
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #218838;
+            transform: translateY(-1px);
+        }
+
+        .btn-danger {
+            background: #dc3545;
+            color: white;
+        }
+
+        .btn-danger:hover {
+            background: #c82333;
+            transform: translateY(-1px);
+        }
+
+        .btn-secondary {
+            background: #6c757d;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.5rem 1rem;
+            font-size: 0.8rem;
+            min-height: 36px;
+        }
+
+        /* Form Elements */
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .form-control:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        /* Control Groups */
+        .zoom-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            background: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .zoom-level {
+            font-weight: bold;
+            min-width: 60px;
+            text-align: center;
+            color: #333;
+        }
+
+        .page-controls {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            background: white;
+            padding: 0.5rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .page-info {
+            font-weight: bold;
+            min-width: 100px;
+            text-align: center;
+            color: #333;
+        }
+
+        /* Responsive Design */
+        @media (min-width: 768px) {
+            .container {
+                padding: 2rem;
+            }
+
+            .header {
+                padding: 1.5rem;
+            }
+
+            .controls {
+                flex-direction: row;
+                justify-content: space-between;
+            }
+
+            .control-row {
+                justify-content: flex-start;
+            }
+
+            .pdf-viewer {
+                height: 80vh;
+            }
+        }
+
+        @media (min-width: 1024px) {
+            .logo {
+                font-size: 1.5rem;
+            }
+        }
+
+        /* Loading States */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Upload Mode Selector */
+        .upload-mode-selector {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+            justify-content: center;
+        }
+
+        .mode-btn {
+            padding: 12px 20px;
+            border: 2px solid #e0e0e0;
+            background: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .mode-btn:hover {
+            border-color: #007bff;
+            background: #f8f9fa;
+        }
+
+        .mode-btn.active {
+            border-color: #007bff;
+            background: #007bff;
+            color: white;
+        }
+
+        /* Bulk Files List */
+        .bulk-files-list {
+            margin-top: 20px;
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 20px;
+            background: #f8f9fa;
+        }
+
+        .bulk-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #dee2e6;
+        }
+
+        .bulk-header h4 {
+            margin: 0;
+            color: #333;
+        }
+
+        .files-container {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 15px;
+        }
+
+        .file-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px;
+            margin-bottom: 8px;
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+        }
+
+        .file-item:hover {
+            border-color: #007bff;
+            box-shadow: 0 2px 4px rgba(0,123,255,0.1);
+        }
+
+        .file-item.error {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+
+        .file-item.success {
+            border-color: #28a745;
+            background: #f8fff8;
+        }
+
+        .file-details {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            flex: 1;
+        }
+
+        .file-details i {
+            color: #dc3545;
+            font-size: 1.2rem;
+        }
+
+        .file-info-text {
+            flex: 1;
+        }
+
+        .file-name {
+            font-weight: 500;
+            color: #333;
+            margin-bottom: 2px;
+        }
+
+        .file-size {
+            font-size: 0.85rem;
+            color: #666;
+        }
+
+        .file-status {
+            font-size: 0.85rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .file-status.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .file-status.processing {
+            background: #d1ecf1;
+            color: #0c5460;
+        }
+
+        .file-status.success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .file-status.error {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .bulk-actions {
+            text-align: center;
+            padding-top: 15px;
+            border-top: 1px solid #dee2e6;
+        }
+
+        .bulk-progress {
+            margin-top: 15px;
+            padding: 15px;
+            background: white;
+            border-radius: 6px;
+            border: 1px solid #e0e0e0;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e9ecef;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: #007bff;
+            transition: width 0.3s ease;
+        }
+
+        .progress-text {
+            text-align: center;
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        /* Utilities */
+        .text-center { text-align: center; }
+        .text-muted { color: #666; }
+        .mb-0 { margin-bottom: 0; }
+        .mb-1 { margin-bottom: 0.5rem; }
+        .mb-2 { margin-bottom: 1rem; }
+        .d-none { display: none; }
+        .d-flex { display: flex; }
+        .justify-between { justify-content: space-between; }
+        .align-center { align-items: center; }
+        .gap-1 { gap: 0.5rem; }
+        .gap-2 { gap: 1rem; }
+    </style>
+</head>
+<body>
+    <!-- Toast Container -->
+    <div class="toast-container" id="toastContainer"></div>
+    <header class="header">
+        <div class="header-content">
+            <div class="logo">
+                <i class="fas fa-file-signature"></i>
+                Admin - Sistema de Assinatura
+            </div>
+            <div class="user-info">
+                <i class="fas fa-user-shield"></i>
+                <span id="admin-name">Administrador</span>
+                <button class="btn btn-danger btn-sm" onclick="logout()">
+                    <i class="fas fa-sign-out-alt"></i>
+                    Sair
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Navigation -->
+        <div class="nav-section">
+            <div class="nav-tabs">
+                <button class="nav-tab active" onclick="showSection('upload')">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    Upload
+                </button>
+                <button class="nav-tab" onclick="showSection('position')">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Posicionar
+                </button>
+                <button class="nav-tab" onclick="window.location.href='/admin-dashboard.html'">
+                    <i class="fas fa-chart-pie"></i>
+                    Dashboard
+                </button>
+            </div>
+        </div>
+
+        <!-- Upload Section -->
+        <div id="upload-section" class="card">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-file-pdf"></i>
+                    Upload de Documento
+                </h2>
+            </div>
+            
+            <div class="upload-mode-selector">
+                <button class="mode-btn active" data-mode="single">
+                    <i class="fas fa-file"></i>
+                    Upload Individual
+                </button>
+                <button class="mode-btn" data-mode="bulk">
+                    <i class="fas fa-files"></i>
+                    Upload em Lote
+                </button>
+            </div>
+            
+            <!-- Upload Individual -->
+            <div class="upload-area" id="uploadArea" onclick="handleUploadClick()">
+                <div class="upload-icon">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                </div>
+                <div class="upload-text">
+                    <strong id="uploadTitle">Clique aqui ou arraste um arquivo PDF</strong><br>
+                    <span class="text-muted" id="uploadSubtitle">Formatos aceitos: PDF (máx. 10MB)</span>
+                </div>
+                <input type="file" id="pdf-file" accept=".pdf" style="display: none;" onchange="loadPDF(event)">
+                <input type="file" id="pdf-file-bulk" accept=".pdf" multiple style="display: none;" onchange="loadBulkPDFs(event)">
+            </div>
+            
+            <!-- Lista de arquivos em lote -->
+            <div class="bulk-files-list" id="bulkFilesList" style="display: none;">
+                <div class="bulk-header">
+                    <h4>Arquivos Selecionados</h4>
+                    <button class="btn btn-sm" id="clearBulkFiles" onclick="clearBulkFiles()">
+                        <i class="fas fa-trash"></i> Limpar
+                    </button>
+                </div>
+                <div class="files-container" id="filesContainer"></div>
+                <div class="bulk-actions">
+                    <button class="btn btn-primary" id="processBulkFiles" onclick="processBulkFiles()" disabled>
+                        <i class="fas fa-cog"></i> Processar Arquivos
+                    </button>
+                </div>
+            </div>
+            
+            <div id="upload-info" class="d-none">
+                <div class="form-group">
+                    <label class="form-label">Arquivo Selecionado:</label>
+                    <div id="file-name" class="text-muted"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PDF Positioning Section -->
+        <div class="pdf-container card" id="pdf-container" style="display: none;">
+            <div class="card-header">
+                <h2 class="card-title">
+                    <i class="fas fa-map-marker-alt"></i>
+                    Posicionar Assinaturas
+                </h2>
+                <div class="d-flex gap-1">
+                    <button class="btn btn-success btn-sm" onclick="addSignature()">
+                        <i class="fas fa-plus"></i>
+                        Adicionar
+                    </button>
+                    <button class="btn btn-danger btn-sm" onclick="removeSelectedSignature()">
+                        <i class="fas fa-trash"></i>
+                        Remover
+                    </button>
+                </div>
+            </div>
+            
+            <div class="pdf-viewer" id="pdf-viewer">
+                <div class="loading" id="pdf-loading">
+                    <div class="spinner"></div>
+                    <p>Carregando PDF...</p>
+                </div>
+                <canvas id="pdf-canvas"></canvas>
+                <div class="signature-overlay" id="signature-overlay"></div>
+            </div>
+            
+            <div class="controls">
+                <div class="control-row">
+                    <div class="page-controls">
+                        <button class="btn btn-primary btn-sm" onclick="previousPage()">
+                            <i class="fas fa-chevron-left"></i>
+                            Anterior
+                        </button>
+                        <span class="page-info" id="page-info">Página 1 de 1</span>
+                        <button class="btn btn-primary btn-sm" onclick="nextPage()">
+                            Próxima
+                            <i class="fas fa-chevron-right"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="control-row">
+                    <div class="zoom-controls">
+                        <button class="btn btn-primary btn-sm" onclick="zoomOut()">
+                            <i class="fas fa-search-minus"></i>
+                        </button>
+                        <span class="zoom-level" id="zoom-level">100%</span>
+                        <button class="btn btn-primary btn-sm" onclick="zoomIn()">
+                            <i class="fas fa-search-plus"></i>
+                        </button>
+                        <button class="btn btn-primary btn-sm" onclick="fitToWidth()">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                            Ajustar
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="control-row">
+                    <button class="btn btn-success" onclick="uploadDocument()">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                        Enviar Documento
+                    </button>
+                    <button class="btn btn-secondary" onclick="resetPositions()">
+                        <i class="fas fa-undo"></i>
+                        Resetar
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração do PDF.js
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+        
+        let pdfDoc = null;
+        let currentPage = 1;
+        let scale = 1.0;
+        let canvas = null;
+        let ctx = null;
+        let signatureElements = [];
+        let selectedElement = null;
+        let signatureCounter = 0;
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let uploadMode = 'single'; // 'single' ou 'bulk'
+        let bulkFiles = [];
+        let bulkProcessing = false;
+        
+        // Inicialização
+        document.addEventListener('DOMContentLoaded', function() {
+            canvas = document.getElementById('pdf-canvas');
+            ctx = canvas.getContext('2d');
+            
+            // Event listeners para arrastar assinaturas
+            canvas.addEventListener('click', handleCanvasClick);
+            document.addEventListener('mousemove', handleMouseMove);
+            document.addEventListener('mouseup', handleMouseUp);
+            
+            // Configurar sincronização de scroll
+            setupScrollSync();
+            
+            // Configurar drag and drop
+            setupDragAndDrop();
+            
+            // Configurar modo de upload
+            setupUploadMode();
+            
+            // Verificar autenticação
+            checkAuth();
+        });
+        
+        // Verificar autenticação
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            if (!token || user.role !== 'admin') {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            document.getElementById('admin-name').textContent = user.email || 'Administrador';
+        }
+        
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/login.html';
+        }
+        
+        // Configurar modo de upload
+        function setupUploadMode() {
+            const modeButtons = document.querySelectorAll('.mode-btn');
+            
+            modeButtons.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Remover active de todos
+                    modeButtons.forEach(b => b.classList.remove('active'));
+                    
+                    // Adicionar active ao clicado
+                    this.classList.add('active');
+                    
+                    // Atualizar modo
+                    uploadMode = this.dataset.mode;
+                    
+                    // Atualizar interface
+                    updateUploadInterface();
+                });
+            });
+        }
+        
+        // Atualizar interface baseada no modo
+        function updateUploadInterface() {
+            const uploadArea = document.getElementById('uploadArea');
+            const uploadTitle = document.getElementById('uploadTitle');
+            const uploadSubtitle = document.getElementById('uploadSubtitle');
+            const bulkFilesList = document.getElementById('bulkFilesList');
+            
+            if (uploadMode === 'single') {
+                uploadTitle.textContent = 'Clique aqui ou arraste um arquivo PDF';
+                uploadSubtitle.textContent = 'Formatos aceitos: PDF (máx. 10MB)';
+                bulkFilesList.style.display = 'none';
+            } else {
+                uploadTitle.textContent = 'Clique aqui ou arraste múltiplos arquivos PDF';
+                uploadSubtitle.textContent = 'Formatos aceitos: PDF (máx. 10MB cada)';
+                bulkFilesList.style.display = bulkFiles.length > 0 ? 'block' : 'none';
+            }
+        }
+        
+        // Gerenciar clique no upload
+        function handleUploadClick() {
+            if (uploadMode === 'single') {
+                document.getElementById('pdf-file').click();
+            } else {
+                document.getElementById('pdf-file-bulk').click();
+            }
+        }
+        
+        // Carregar PDFs em lote
+        async function loadBulkPDFs(event) {
+            const files = Array.from(event.target.files);
+            let firstValidFile = null;
+            
+            files.forEach(file => {
+                if (file.type === 'application/pdf' && file.size <= 10 * 1024 * 1024) {
+                    const fileObj = {
+                        id: Date.now() + Math.random(),
+                        file: file,
+                        name: file.name,
+                        size: formatFileSize(file.size),
+                        status: 'pending'
+                    };
+                    
+                    bulkFiles.push(fileObj);
+                    
+                    // Guardar o primeiro arquivo válido como modelo
+                    if (!firstValidFile) {
+                        firstValidFile = file;
+                    }
+                }
+            });
+            
+            updateBulkFilesList();
+            updateUploadInterface();
+            
+            // Se há arquivos válidos, carregar o primeiro como modelo
+            if (firstValidFile && bulkFiles.length > 0) {
+                await loadPDFAsTemplate(firstValidFile);
+                
+                // Mostrar mensagem explicativa
+                showTemplateMessage(firstValidFile.name, bulkFiles.length);
+            }
+        }
+        
+        // Carregar PDF como modelo para definir posições
+        async function loadPDFAsTemplate(file) {
+            try {
+                // Mostrar informações do arquivo modelo
+                document.getElementById('file-name').textContent = `${file.name} (Modelo)`;
+                document.getElementById('upload-info').classList.remove('d-none');
+                
+                // Mostrar loading
+                const loading = document.getElementById('pdf-loading');
+                if (loading) loading.style.display = 'block';
+                
+                const arrayBuffer = await file.arrayBuffer();
+                pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+                
+                console.log('PDF modelo carregado:', pdfDoc.numPages, 'páginas');
+                
+                currentPage = 1;
+                signatureElements = []; // Reset signatures
+                await renderPage();
+                
+                // Automaticamente ir para a seção de posicionamento
+                showSection('position');
+                updatePageInfo();
+                
+            } catch (error) {
+                console.error('Erro ao carregar PDF modelo:', error);
+                alert('Erro ao carregar o PDF modelo. Verifique se o arquivo é válido.');
+            }
+        }
+        
+        // Mostrar mensagem explicativa sobre o modelo
+        function showTemplateMessage(fileName, totalFiles) {
+            const message = document.createElement('div');
+            message.className = 'alert alert-info mt-3';
+            message.innerHTML = `
+                <i class="fas fa-info-circle"></i>
+                <strong>Modelo carregado:</strong> ${fileName}<br>
+                Defina as posições de assinatura neste documento. Elas serão aplicadas a todos os ${totalFiles} arquivos selecionados.
+            `;
+            
+            const bulkSection = document.querySelector('.bulk-files-section');
+            if (bulkSection) {
+                const existingAlert = bulkSection.querySelector('.alert-info');
+                if (existingAlert) {
+                    existingAlert.remove();
+                }
+                bulkSection.insertBefore(message, bulkSection.firstChild);
+            }
+        }
+        
+        // Atualizar lista de arquivos em lote
+        function updateBulkFilesList() {
+            const container = document.getElementById('filesContainer');
+            const processBtn = document.getElementById('processBulkFiles');
+            
+            container.innerHTML = '';
+            
+            bulkFiles.forEach(fileObj => {
+                const fileItem = document.createElement('div');
+                fileItem.className = `file-item ${fileObj.status}`;
+                
+                fileItem.innerHTML = `
+                    <div class="file-details">
+                        <i class="fas fa-file-pdf"></i>
+                        <div class="file-info-text">
+                            <div class="file-name">${fileObj.name}</div>
+                            <div class="file-size">${fileObj.size}</div>
+                        </div>
+                    </div>
+                    <div class="file-status ${fileObj.status}">
+                        ${getStatusText(fileObj.status)}
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="removeBulkFile('${fileObj.id}')">
+                        <i class="fas fa-times"></i>
+                    </button>
+                `;
+                
+                container.appendChild(fileItem);
+            });
+            
+            // Habilitar/desabilitar botão de processar
+            processBtn.disabled = bulkFiles.length === 0 || bulkProcessing;
+        }
+        
+        // Remover arquivo da lista
+        function removeBulkFile(fileId) {
+            bulkFiles = bulkFiles.filter(f => f.id != fileId);
+            updateBulkFilesList();
+            updateUploadInterface();
+        }
+        
+        // Limpar todos os arquivos
+        function clearBulkFiles() {
+            if (confirm('Remover todos os arquivos da lista?')) {
+                bulkFiles = [];
+                updateBulkFilesList();
+                updateUploadInterface();
+            }
+        }
+        
+        // Processar arquivos em lote
+         async function processBulkFiles() {
+             if (bulkFiles.length === 0) {
+                 showToast('Nenhum arquivo para processar', 'warning');
+                 return;
+             }
+             
+             // Verificar se há posições de assinatura definidas
+             if (signatureElements.length === 0) {
+                 showToast('Por favor, defina as posições de assinatura no documento modelo antes de processar em lote.', 'warning');
+                 return;
+             }
+             
+             if (!confirm(`Processar ${bulkFiles.length} arquivos usando as posições de assinatura atuais?`)) {
+                 return;
+             }
+             
+             bulkProcessing = true;
+             updateBulkFilesList();
+             
+             const progressContainer = document.createElement('div');
+             progressContainer.className = 'bulk-progress';
+             progressContainer.innerHTML = `
+                 <div class="progress-bar">
+                     <div class="progress-fill" id="bulkProgressFill" style="width: 0%"></div>
+                 </div>
+                 <div class="progress-text" id="bulkProgressText">Processando arquivos...</div>
+             `;
+             
+             document.getElementById('bulkFilesList').appendChild(progressContainer);
+             
+             // Capturar posições de assinatura com mais detalhes
+             const referenceSignaturePositions = signatureElements.map(element => {
+                 const overlay = document.getElementById('signature-overlay');
+                 const x = parseInt(element.style.left);
+                 const y = parseInt(element.style.top);
+                 
+                 return {
+                     id: parseInt(element.dataset.id),
+                     page: parseInt(element.dataset.page) - 1, // PDF.js usa índice 0
+                     x: x,
+                     y: y,
+                     width: element.offsetWidth,
+                     height: element.offsetHeight,
+                     relativeX: parseFloat(element.dataset.relativeX) || (x / overlay.offsetWidth) * 100,
+                     relativeY: parseFloat(element.dataset.relativeY) || (y / overlay.offsetHeight) * 100
+                 };
+             });
+             
+             console.log('Posições de assinatura para lote:', referenceSignaturePositions);
+             
+             // Marcar todos os arquivos como processando
+             bulkFiles.forEach(fileObj => {
+                 fileObj.status = 'processing';
+             });
+             updateBulkFilesList();
+             
+             // Upload em lote otimizado
+             try {
+                 // Mostrar animação de loading melhorada
+                 document.getElementById('bulkProgressText').innerHTML = `
+                     <div style="display: flex; align-items: center; gap: 10px;">
+                         <div class="spinner-border spinner-border-sm" role="status">
+                             <span class="visually-hidden">Loading...</span>
+                         </div>
+                         <span>Processando ${bulkFiles.length} arquivo(s)...</span>
+                     </div>
+                 `;
+                 
+                 const result = await uploadBulkFiles(bulkFiles, referenceSignaturePositions);
+                 
+                 if (result.success) {
+                     // Marcar arquivos como sucesso baseado no resultado
+                     if (result.results && result.results.length > 0) {
+                         result.results.forEach((uploadResult, index) => {
+                             if (index < bulkFiles.length) {
+                                 bulkFiles[index].status = uploadResult.success ? 'success' : 'error';
+                             }
+                         });
+                     } else {
+                         // Se não há detalhes, marcar todos como sucesso
+                         bulkFiles.forEach(fileObj => {
+                             fileObj.status = 'success';
+                         });
+                     }
+                     
+                     document.getElementById('bulkProgressFill').style.width = '100%';
+                     document.getElementById('bulkProgressText').textContent = 
+                         `Processamento concluído: ${result.successCount || bulkFiles.length} sucessos, ${result.errorCount || 0} erros`;
+                 } else {
+                     // Marcar todos como erro
+                     bulkFiles.forEach(fileObj => {
+                         fileObj.status = 'error';
+                     });
+                     
+                     document.getElementById('bulkProgressText').textContent = 
+                         `Erro no processamento: ${result.error || 'Erro desconhecido'}`;
+                 }
+                 
+             } catch (error) {
+                 console.error('Erro no upload em lote:', error);
+                 bulkFiles.forEach(fileObj => {
+                     fileObj.status = 'error';
+                 });
+                 
+                 document.getElementById('bulkProgressText').textContent = 
+                     `Erro no processamento: ${error.message}`;
+             }
+             
+             updateBulkFilesList();
+             
+             bulkProcessing = false;
+             
+             // Remover barra de progresso após 5 segundos
+             setTimeout(() => {
+                 if (progressContainer.parentNode) {
+                     progressContainer.remove();
+                 }
+             }, 5000);
+             
+             const successCount = bulkFiles.filter(f => f.status === 'success').length;
+             const errorCount = bulkFiles.filter(f => f.status === 'error').length;
+             
+             showToast(`Processamento concluído! ✅ Sucesso: ${successCount} | ❌ Erros: ${errorCount}. Todos os arquivos foram processados com as mesmas posições de assinatura.`, 'success', 6000);
+             
+             // Limpar lista após processamento bem-sucedido
+             if (successCount > 0 && errorCount === 0) {
+                 setTimeout(() => {
+                     if (confirm('Processamento concluído com sucesso! Deseja limpar a lista de arquivos?')) {
+                         clearBulkFiles();
+                     }
+                 }, 1000);
+             }
+         }
+        
+        // Upload de arquivo individual (para uso no lote)
+         async function uploadSingleFile(file, signaturePositions = []) {
+             const formData = new FormData();
+             formData.append('pdf', file);
+             formData.append('signaturePositions', JSON.stringify(signaturePositions));
+             
+             try {
+                 const response = await fetch('/api/documents/upload', {
+                     method: 'POST',
+                     headers: {
+                         'Authorization': `Bearer ${localStorage.getItem('token')}`
+                     },
+                     body: formData
+                 });
+                 
+                 if (response.ok) {
+                     const result = await response.json();
+                     return true;
+                 } else {
+                     const error = await response.json();
+                     console.error('Erro no upload:', error.error);
+                     return false;
+                 }
+             } catch (error) {
+                 console.error('Erro no upload:', error);
+                 return false;
+             }
+         }
+         
+         // Upload em lote otimizado
+         async function uploadBulkFiles(files, signaturePositions) {
+             const formData = new FormData();
+             
+             // Adicionar todos os arquivos
+             files.forEach(fileObj => {
+                 formData.append('pdfs', fileObj.file);
+             });
+             
+             // Adicionar posições de assinatura
+             formData.append('signaturePositions', JSON.stringify(signaturePositions));
+             
+             try {
+                 const response = await fetch('/api/documents/upload-bulk', {
+                     method: 'POST',
+                     headers: {
+                         'Authorization': `Bearer ${localStorage.getItem('token')}`
+                     },
+                     body: formData
+                 });
+                 
+                 if (response.ok) {
+                     const result = await response.json();
+                     return result;
+                 } else {
+                     const error = await response.json();
+                     console.error('Erro no upload em lote:', error.error);
+                     return { success: false, error: error.error };
+                 }
+             } catch (error) {
+                 console.error('Erro no upload em lote:', error);
+                 return { success: false, error: error.message };
+             }
+         }
+        
+        // Formatar tamanho do arquivo
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+        }
+        
+        // Obter texto do status
+        function getStatusText(status) {
+            const statusTexts = {
+                'pending': 'Aguardando',
+                'processing': 'Processando...',
+                'success': 'Concluído',
+                'error': 'Erro'
+            };
+            
+            return statusTexts[status] || status;
+        }
+        
+        // Navegação por seções
+        function showSection(sectionName) {
+            // Update nav tabs
+            document.querySelectorAll('.nav-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Find and activate the clicked tab
+            const clickedTab = Array.from(document.querySelectorAll('.nav-tab')).find(tab => 
+                tab.textContent.trim().toLowerCase().includes(sectionName.toLowerCase())
+            );
+            if (clickedTab) clickedTab.classList.add('active');
+            
+            // Show/hide sections based on current state
+            if (sectionName === 'upload') {
+                document.getElementById('upload-section').style.display = 'block';
+                document.getElementById('pdf-container').style.display = 'none';
+            } else if (sectionName === 'position') {
+                if (pdfDoc) {
+                    document.getElementById('upload-section').style.display = 'none';
+                    document.getElementById('pdf-container').style.display = 'block';
+                } else {
+                    alert('Por favor, faça upload de um PDF primeiro');
+                    showSection('upload');
+                }
+            }
+        }
+        
+        // Configurar drag and drop
+        function setupDragAndDrop() {
+            const uploadArea = document.querySelector('.upload-area');
+            
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+            
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+            
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                
+                const files = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
+                
+                if (files.length > 0) {
+                    if (uploadMode === 'single') {
+                        const pdfFile = files[0];
+                        document.getElementById('pdf-file').files = createFileList([pdfFile]);
+                        loadPDF({ target: { files: [pdfFile] } });
+                    } else {
+                        // Modo bulk - adicionar todos os arquivos PDF
+                        let firstValidFile = null;
+                        
+                        files.forEach(file => {
+                            if (file.size <= 10 * 1024 * 1024) {
+                                const fileObj = {
+                                    id: Date.now() + Math.random(),
+                                    file: file,
+                                    name: file.name,
+                                    size: formatFileSize(file.size),
+                                    status: 'pending'
+                                };
+                                
+                                bulkFiles.push(fileObj);
+                                
+                                // Guardar o primeiro arquivo válido como modelo
+                                if (!firstValidFile) {
+                                    firstValidFile = file;
+                                }
+                            }
+                        });
+                        
+                        updateBulkFilesList();
+                        updateUploadInterface();
+                        
+                        // Se há arquivos válidos, carregar o primeiro como modelo
+                        if (firstValidFile && bulkFiles.length > 0) {
+                            loadPDFAsTemplate(firstValidFile).then(() => {
+                                showTemplateMessage(firstValidFile.name, bulkFiles.length);
+                            });
+                        }
+                    }
+                } else {
+                    alert('Por favor, solte apenas arquivos PDF');
+                }
+            });
+        }
+        
+        function createFileList(files) {
+            const dt = new DataTransfer();
+            files.forEach(file => dt.items.add(file));
+            return dt.files;
+        }
+        
+        // Configurar sincronização de scroll
+        function setupScrollSync() {
+            const viewer = document.getElementById('pdf-viewer');
+            
+            viewer.addEventListener('scroll', function() {
+                // Reposicionar overlay quando houver scroll
+                updateOverlayPosition();
+            });
+        }
+        
+        // Atualizar posição do overlay
+        function updateOverlayPosition() {
+            const overlay = document.getElementById('signature-overlay');
+            const viewer = document.getElementById('pdf-viewer');
+            
+            if (canvas && overlay) {
+                // Posicionar overlay exatamente sobre o canvas
+                overlay.style.transform = 'none';
+                overlay.style.left = canvas.offsetLeft + 'px';
+                overlay.style.top = canvas.offsetTop + 'px';
+                overlay.style.width = canvas.width + 'px';
+                overlay.style.height = canvas.height + 'px';
+            }
+        }
+        
+        // Carregar PDF
+        async function loadPDF(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            
+            // Validar arquivo
+            if (file.type !== 'application/pdf') {
+                alert('Por favor, selecione apenas arquivos PDF');
+                return;
+            }
+            
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Arquivo muito grande. Máximo 10MB');
+                return;
+            }
+            
+            // Mostrar informações do arquivo
+            document.getElementById('file-name').textContent = file.name;
+            document.getElementById('upload-info').classList.remove('d-none');
+            
+            // Mostrar loading
+            const loading = document.getElementById('pdf-loading');
+            if (loading) loading.style.display = 'block';
+            
+            try {
+                const arrayBuffer = await file.arrayBuffer();
+                pdfDoc = await pdfjsLib.getDocument(arrayBuffer).promise;
+                
+                console.log('PDF carregado:', pdfDoc.numPages, 'páginas');
+                
+                currentPage = 1;
+                signatureElements = []; // Reset signatures
+                await renderPage();
+                
+                // Automaticamente ir para a seção de posicionamento
+                showSection('position');
+                updatePageInfo();
+                
+            } catch (error) {
+                console.error('Erro ao carregar PDF:', error);
+                alert('Erro ao carregar o PDF. Verifique se o arquivo é válido.');
+            }
+        }
+        
+        // Renderizar página
+        async function renderPage() {
+            if (!pdfDoc) return;
+            
+            try {
+                const page = await pdfDoc.getPage(currentPage);
+                const viewport = page.getViewport({ scale: scale });
+                
+                canvas.width = viewport.width;
+                canvas.height = viewport.height;
+                
+                const renderContext = {
+                    canvasContext: ctx,
+                    viewport: viewport
+                };
+                
+                await page.render(renderContext).promise;
+                
+                // Atualizar overlay para coincidir com o canvas
+                const overlay = document.getElementById('signature-overlay');
+                overlay.style.width = viewport.width + 'px';
+                overlay.style.height = viewport.height + 'px';
+                
+                // Aguardar um frame para garantir que o canvas foi renderizado
+                requestAnimationFrame(() => {
+                    updateOverlayPosition();
+                });
+                
+                // Reposicionar elementos de assinatura
+                repositionSignatureElements();
+                
+                // Esconder loading
+                const loading = document.getElementById('pdf-loading');
+                if (loading) loading.style.display = 'none';
+                
+            } catch (error) {
+                console.error('Erro ao renderizar página:', error);
+                // Esconder loading em caso de erro
+                const loading = document.getElementById('pdf-loading');
+                if (loading) loading.style.display = 'none';
+            }
+        }
+        
+        // Reset posições das assinaturas
+        function resetPositions() {
+            if (confirm('Tem certeza que deseja remover todas as posições de assinatura?')) {
+                signatureElements.forEach(element => {
+                    element.remove();
+                });
+                signatureElements = [];
+                console.log('Posições de assinatura resetadas');
+            }
+        }
+        
+        // Controles de página
+        async function previousPage() {
+            if (currentPage > 1) {
+                currentPage--;
+                await renderPage();
+                updatePageInfo();
+            }
+        }
+        
+        async function nextPage() {
+            if (currentPage < pdfDoc.numPages) {
+                currentPage++;
+                await renderPage();
+                updatePageInfo();
+            }
+        }
+        
+        function updatePageInfo() {
+            document.getElementById('page-info').textContent = `Página ${currentPage} de ${pdfDoc ? pdfDoc.numPages : 1}`;
+        }
+        
+        // Controles de zoom
+        async function zoomIn() {
+            scale = Math.min(scale * 1.2, 3.0);
+            await renderPage();
+            updateZoomLevel();
+        }
+        
+        async function zoomOut() {
+            scale = Math.max(scale / 1.2, 0.5);
+            await renderPage();
+            updateZoomLevel();
+        }
+        
+        async function fitToWidth() {
+            const viewer = document.getElementById('pdf-viewer');
+            const viewerWidth = viewer.clientWidth - 40; // margem
+            
+            if (pdfDoc) {
+                const page = await pdfDoc.getPage(currentPage);
+                const viewport = page.getViewport({ scale: 1.0 });
+                scale = viewerWidth / viewport.width;
+                await renderPage();
+                updateZoomLevel();
+            }
+        }
+        
+        function updateZoomLevel() {
+            document.getElementById('zoom-level').textContent = Math.round(scale * 100) + '%';
+        }
+        
+        // Adicionar elemento de assinatura
+        function addSignature() {
+            if (!pdfDoc) {
+                alert('Carregue um PDF primeiro.');
+                return;
+            }
+            
+            const overlay = document.getElementById('signature-overlay');
+            const element = document.createElement('div');
+            element.className = 'signature-element';
+            element.textContent = `Assinatura ${++signatureCounter}`;
+            
+            // Posição inicial (centro do canvas/overlay)
+            const overlayWidth = overlay.offsetWidth;
+            const overlayHeight = overlay.offsetHeight;
+            
+            const x = (overlayWidth / 2) - 60; // 60 = metade da largura padrão
+            const y = (overlayHeight / 2) - 20; // 20 = metade da altura padrão
+            
+            element.style.left = Math.max(0, Math.min(x, overlayWidth - 120)) + 'px';
+            element.style.top = Math.max(0, Math.min(y, overlayHeight - 40)) + 'px';
+            element.style.width = '120px';
+            element.style.height = '40px';
+            
+            // Dados do elemento
+            element.dataset.id = signatureCounter;
+            element.dataset.page = currentPage;
+            
+            // Event listeners
+            element.addEventListener('mousedown', startDrag);
+            element.addEventListener('click', selectElement);
+            
+            overlay.appendChild(element);
+            signatureElements.push(element);
+            
+            console.log('Elemento de assinatura adicionado:', {
+                id: signatureCounter,
+                page: currentPage,
+                x: x,
+                y: y
+            });
+        }
+        
+        // Selecionar elemento
+        function selectElement(event) {
+            event.stopPropagation();
+            
+            // Remover seleção anterior
+            if (selectedElement) {
+                selectedElement.classList.remove('selected');
+            }
+            
+            // Selecionar novo elemento
+            selectedElement = event.target;
+            selectedElement.classList.add('selected');
+        }
+        
+        // Remover elemento selecionado
+        function removeSelectedSignature() {
+            if (!selectedElement) {
+                alert('Selecione um elemento de assinatura primeiro.');
+                return;
+            }
+            
+            const index = signatureElements.indexOf(selectedElement);
+            if (index > -1) {
+                signatureElements.splice(index, 1);
+            }
+            
+            selectedElement.remove();
+            selectedElement = null;
+        }
+        
+        // Arrastar elementos
+        function startDrag(event) {
+            event.preventDefault();
+            event.stopPropagation();
+            
+            isDragging = true;
+            selectedElement = event.target;
+            
+            const viewer = document.getElementById('pdf-viewer');
+            const viewerRect = viewer.getBoundingClientRect();
+            const elementRect = selectedElement.getBoundingClientRect();
+            
+            // Calcular offset relativo ao elemento
+            dragOffset.x = event.clientX - elementRect.left;
+            dragOffset.y = event.clientY - elementRect.top;
+            
+            selectedElement.classList.add('selected');
+        }
+        
+        function handleMouseMove(event) {
+            if (!isDragging || !selectedElement) return;
+            
+            const overlay = document.getElementById('signature-overlay');
+            const viewer = document.getElementById('pdf-viewer');
+            const viewerRect = viewer.getBoundingClientRect();
+            
+            // Calcular posição relativa ao viewer (considerando scroll)
+            let x = event.clientX - viewerRect.left - canvas.offsetLeft + viewer.scrollLeft - dragOffset.x;
+            let y = event.clientY - viewerRect.top - canvas.offsetTop + viewer.scrollTop - dragOffset.y;
+            
+            // Limites baseados nas dimensões do overlay
+            const elementWidth = selectedElement.offsetWidth;
+            const elementHeight = selectedElement.offsetHeight;
+            const maxX = overlay.offsetWidth - elementWidth;
+            const maxY = overlay.offsetHeight - elementHeight;
+            
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+            
+            selectedElement.style.left = x + 'px';
+            selectedElement.style.top = y + 'px';
+        }
+        
+        function handleMouseUp(event) {
+            if (isDragging && selectedElement) {
+                isDragging = false;
+                
+                // Calcular posições relativas
+                const overlay = document.getElementById('signature-overlay');
+                const x = parseInt(selectedElement.style.left);
+                const y = parseInt(selectedElement.style.top);
+                
+                const relativeX = (x / overlay.offsetWidth) * 100;
+                const relativeY = (y / overlay.offsetHeight) * 100;
+                
+                selectedElement.dataset.relativeX = relativeX;
+                selectedElement.dataset.relativeY = relativeY;
+            }
+        }
+        
+        function handleCanvasClick(event) {
+            // Desselecionar se clicar no canvas
+            if (selectedElement && event.target === canvas) {
+                selectedElement.classList.remove('selected');
+                selectedElement = null;
+            }
+        }
+        
+        // Reposicionar elementos após mudança de escala/página
+        function repositionSignatureElements() {
+            const overlay = document.getElementById('signature-overlay');
+            
+            signatureElements.forEach(element => {
+                if (parseInt(element.dataset.page) === currentPage) {
+                    element.style.display = 'flex';
+                    
+                    // Usar posições relativas se disponíveis
+                    if (element.dataset.relativeX && element.dataset.relativeY) {
+                        const x = (parseFloat(element.dataset.relativeX) / 100) * overlay.offsetWidth;
+                        const y = (parseFloat(element.dataset.relativeY) / 100) * overlay.offsetHeight;
+                        
+                        element.style.left = x + 'px';
+                        element.style.top = y + 'px';
+                    }
+                } else {
+                    element.style.display = 'none';
+                }
+            });
+        }
+        
+        // Upload do documento
+        async function uploadDocument() {
+            if (!pdfDoc || signatureElements.length === 0) {
+                alert('Carregue um PDF e adicione pelo menos uma assinatura.');
+                return;
+            }
+            
+            const fileInput = document.getElementById('pdf-file');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                alert('Nenhum arquivo selecionado.');
+                return;
+            }
+            
+            // Coletar posições das assinaturas
+            const signaturePositions = signatureElements.map(element => {
+                const overlay = document.getElementById('signature-overlay');
+                const x = parseInt(element.style.left);
+                const y = parseInt(element.style.top);
+                
+                return {
+                    id: parseInt(element.dataset.id),
+                    page: parseInt(element.dataset.page) - 1, // PDF.js usa índice 0
+                    x: x,
+                    y: y,
+                    width: element.offsetWidth,
+                    height: element.offsetHeight,
+                    relativeX: parseFloat(element.dataset.relativeX) || (x / overlay.offsetWidth) * 100,
+                    relativeY: parseFloat(element.dataset.relativeY) || (y / overlay.offsetHeight) * 100
+                };
+            });
+            
+            console.log('Enviando documento com assinaturas:', signaturePositions);
+            
+            // Enviar para o servidor
+            const formData = new FormData();
+            formData.append('pdf', file);
+            formData.append('signaturePositions', JSON.stringify(signaturePositions));
+            
+            try {
+                const response = await fetch('/api/upload-document', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: formData
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast('Documento enviado com sucesso!', 'success');
+                    console.log('Resultado:', result);
+                    
+                    // Limpar formulário
+                    fileInput.value = '';
+                    document.getElementById('pdf-container').style.display = 'none';
+                    signatureElements = [];
+                    selectedElement = null;
+                    signatureCounter = 0;
+                    
+                } else {
+                    throw new Error('Erro no servidor');
+                }
+                
+            } catch (error) {
+                console.error('Erro ao enviar documento:', error);
+                showToast('Erro ao enviar documento. Tente novamente.', 'error');
+            }
+        }
+        
+        // Logout
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/login.html';
+        }
+        
+        // Verificar autenticação
+        document.addEventListener('DOMContentLoaded', function() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Verificar se é admin
+            fetch('/api/auth/verify', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (!data.success || data.user.role !== 'admin') {
+                    alert('Acesso negado. Apenas administradores podem acessar esta página.');
+                    window.location.href = '/login.html';
+                }
+            })
+            .catch(error => {
+                console.error('Erro na verificação:', error);
+                window.location.href = '/login.html';
+            });
+        });
+        
+        // Função para mostrar toast notifications modernas
+        function showToast(message, type = 'success', duration = 4000) {
+            const container = document.getElementById('toastContainer');
+            
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            
+            const icons = {
+                success: '✓',
+                error: '✗',
+                warning: '⚠',
+                info: 'ℹ'
+            };
+            
+            const titles = {
+                success: 'Sucesso',
+                error: 'Erro',
+                warning: 'Atenção',
+                info: 'Informação'
+            };
+            
+            toast.innerHTML = `
+                <div class="toast-header">
+                    <span class="toast-icon">${icons[type] || icons.info}</span>
+                    <span>${titles[type] || titles.info}</span>
+                </div>
+                <div class="toast-body">${message}</div>
+                <button class="toast-close" onclick="removeToast(this.parentElement)">&times;</button>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Auto remove após duration
+            setTimeout(() => {
+                removeToast(toast);
+            }, duration);
+        }
+        
+        function removeToast(toast) {
+            if (toast && toast.parentElement) {
+                toast.classList.add('removing');
+                setTimeout(() => {
+                    if (toast.parentElement) {
+                        toast.parentElement.removeChild(toast);
+                    }
+                }, 300);
+            }
+        }
+        
+        // Substituir alerts por toasts
+        window.alert = function(message) {
+            showToast(message, 'info');
+        };
+    </script>
+</body>
+</html>

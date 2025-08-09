@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meus Documentos - Sistema de Assinatura</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #f8f9fa;
+            color: #333;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px 0;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header-content {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            font-size: 24px;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logout-btn {
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .logout-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .welcome-section {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .welcome-section h2 {
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+
+        .welcome-section p {
+            color: #666;
+            font-size: 16px;
+        }
+
+        .documents-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+
+        .document-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            padding: 25px;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+
+        .document-card:hover {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            transform: translateY(-2px);
+        }
+
+        .document-status {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .status-pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .status-signed {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .document-info h3 {
+            margin-bottom: 15px;
+            color: #333;
+            font-size: 18px;
+        }
+
+        .document-info p {
+            color: #666;
+            margin-bottom: 8px;
+            font-size: 14px;
+        }
+
+        .document-actions {
+            margin-top: 20px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+        }
+
+        .btn-success {
+            background: #28a745;
+            color: white;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .success {
+            background: #d4edda;
+            color: #155724;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            display: none;
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .refresh-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-bottom: 20px;
+            transition: all 0.3s ease;
+        }
+
+        .refresh-btn:hover {
+            background: #5a6fd8;
+            transform: translateY(-1px);
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-content">
+            <h1>📄 Meus Documentos</h1>
+            <div class="user-info">
+                <span id="userCpf"></span>
+                <button class="logout-btn" onclick="logout()">Sair</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="container">
+        <div class="welcome-section">
+            <h2>👋 Bem-vindo!</h2>
+            <p>Visualize e assine seus documentos pendentes</p>
+        </div>
+
+        <div class="error" id="error"></div>
+        <div class="success" id="success"></div>
+
+        <button class="refresh-btn" onclick="loadDocuments()">
+            🔄 Atualizar Documentos
+        </button>
+
+        <div class="documents-grid" id="documentsGrid">
+            <!-- Documentos serão carregados aqui -->
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Carregando seus documentos...</p>
+        </div>
+    </div>
+
+    <script>
+        // Verificar autenticação
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const user = JSON.parse(localStorage.getItem('user') || '{}');
+            
+            if (!token || user.role !== 'user') {
+                window.location.href = '/';
+                return;
+            }
+
+            document.getElementById('userCpf').textContent = `CPF: ${user.cpf}`;
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.href = '/';
+        }
+
+        function showMessage(type, message) {
+            const element = document.getElementById(type);
+            element.textContent = message;
+            element.style.display = 'block';
+            
+            setTimeout(() => {
+                element.style.display = 'none';
+            }, 5000);
+        }
+
+        function setLoading(loading) {
+            const loadingDiv = document.getElementById('loading');
+            const grid = document.getElementById('documentsGrid');
+            
+            if (loading) {
+                loadingDiv.style.display = 'block';
+                grid.style.display = 'none';
+            } else {
+                loadingDiv.style.display = 'none';
+                grid.style.display = 'grid';
+            }
+        }
+
+        // Carregar documentos do usuário
+        async function loadDocuments() {
+            setLoading(true);
+
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch('/api/documents/user', {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    displayDocuments(data.documents);
+                } else {
+                    showMessage('error', data.error || 'Erro ao carregar documentos');
+                }
+            } catch (error) {
+                showMessage('error', 'Erro de conexão');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        function displayDocuments(documents) {
+            const grid = document.getElementById('documentsGrid');
+            
+            if (documents.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <h3>📭 Nenhum documento encontrado</h3>
+                        <p>Você não possui documentos pendentes de assinatura no momento.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            grid.innerHTML = documents.map(doc => `
+                <div class="document-card">
+                    <div class="document-status status-${doc.status}">
+                        ${doc.status === 'pending' ? '⏳ Pendente' : '✅ Assinado'}
+                    </div>
+                    
+                    <div class="document-info">
+                        <h3>${doc.nomeFuncionario}</h3>
+                        <p><strong>Arquivo:</strong> ${doc.filename}</p>
+                        <p><strong>Data de envio:</strong> ${doc.createdAt ? new Date(doc.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
+                        ${doc.signedAt ? `<p><strong>Assinado em:</strong> ${new Date(doc.signedAt.seconds * 1000).toLocaleDateString()}</p>` : ''}
+                        ${doc.signaturePositions && doc.signaturePositions.length > 0 ? 
+                            `<p><strong>Campos de assinatura:</strong> ${doc.signaturePositions.length}</p>` : ''}
+                    </div>
+                    
+                    <div class="document-actions">
+                        ${doc.status === 'pending' ? 
+                            `<button class="btn btn-primary" onclick="signDocument('${doc.id}')">
+                                ✍️ Assinar Documento
+                            </button>` :
+                            `<button class="btn btn-success" onclick="viewSignedDocument('${doc.id}')">
+                                👁️ Visualizar Assinado
+                            </button>`
+                        }
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function signDocument(documentId) {
+            // Redirecionar para a página de assinatura
+            window.location.href = `/sign-pdfjs?documentId=${documentId}`;
+        }
+
+        async function viewSignedDocument(documentId) {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/signature/document/${documentId}`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.success) {
+                    const document = data.document;
+                    
+                    // Verificar se o documento foi assinado e tem URL assinada
+                    if (document.status === 'signed' && document.signedUrl) {
+                        // Abrir o documento assinado em nova aba
+                        window.open(document.signedUrl, '_blank');
+                    } else {
+                        showMessage('error', 'Documento ainda não foi assinado ou URL não disponível');
+                    }
+                } else {
+                    showMessage('error', data.error || 'Erro ao obter documento');
+                }
+            } catch (error) {
+                console.error('Erro ao visualizar documento assinado:', error);
+                showMessage('error', 'Erro de conexão');
+            }
+        }
+
+        // Inicialização
+        checkAuth();
+        loadDocuments();
+    </script>
+</body>
+</html>
