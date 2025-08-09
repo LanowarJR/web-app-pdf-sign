@@ -616,10 +616,12 @@
             }
             
             try {
+                const token = localStorage.getItem('token');
                 const response = await fetch('/api/documents/delete-bulk', {
                     method: 'DELETE',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ documentIds: Array.from(selectedDocuments) })
                 });
@@ -697,8 +699,12 @@
             }
             
             try {
+                const token = localStorage.getItem('token');
                 const response = await fetch(`/api/documents/${docId}`, {
-                    method: 'DELETE'
+                    method: 'DELETE',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
                 });
                 
                 if (!response.ok) {
