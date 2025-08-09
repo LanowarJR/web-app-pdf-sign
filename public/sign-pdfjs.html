@@ -540,14 +540,28 @@
             });
         }
         
+        // Throttle para otimizar performance
+        function throttle(func, limit) {
+            let inThrottle;
+            return function() {
+                const args = arguments;
+                const context = this;
+                if (!inThrottle) {
+                    func.apply(context, args);
+                    inThrottle = true;
+                    setTimeout(() => inThrottle = false, limit);
+                }
+            }
+        }
+        
         // Configurar sincronização de scroll
         function setupScrollSync() {
             const viewer = document.getElementById('pdf-viewer');
             
-            viewer.addEventListener('scroll', function() {
-                // Reposicionar overlay quando houver scroll
-                updateOverlayPosition();
-            });
+            // Throttle para reduzir chamadas durante scroll
+            const throttledUpdate = throttle(updateOverlayPosition, 16); // ~60fps
+            
+            viewer.addEventListener('scroll', throttledUpdate);
         }
         
         // Atualizar posição do overlay
@@ -567,13 +581,7 @@
                 overlay.style.width = canvas.offsetWidth + 'px';
                 overlay.style.height = canvas.offsetHeight + 'px';
                 
-                console.log('Overlay posicionado:', {
-                    left: overlay.style.left,
-                    top: overlay.style.top,
-                    width: overlay.style.width,
-                    height: overlay.style.height,
-                    canvasSize: { width: canvas.offsetWidth, height: canvas.offsetHeight }
-                });
+                // Log removido para evitar spam no console durante scroll
             }
         }
         

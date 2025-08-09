@@ -34,9 +34,9 @@ const limiter = rateLimit({
 });
 
 const authLimiter = rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 5, // máximo 5 tentativas de login por IP
-    message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
+    windowMs: 2 * 60 * 1000, // 2 minutos para teste
+    max: 10, // máximo 10 tentativas de login por IP
+    message: { error: 'Muitas tentativas de login. Tente novamente em 2 minutos.' },
     standardHeaders: true,
     legacyHeaders: false
 });
