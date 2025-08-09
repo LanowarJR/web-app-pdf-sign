@@ -18,20 +18,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
+// Helmet com configuração mais permissiva para debug
 app.use(helmet({
-    contentSecurityPolicy: {
-        directives: {
-            defaultSrc: ["'self'"],
-            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
-            imgSrc: ["'self'", "data:", "https:"],
-            connectSrc: ["'self'", "https://firestore.googleapis.com", "https://storage.googleapis.com"],
-            fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
-            objectSrc: ["'none'"],
-            mediaSrc: ["'self'"],
-            frameSrc: ["'none'"]
-        }
-    },
+    contentSecurityPolicy: false, // Desabilitar CSP temporariamente
     crossOriginEmbedderPolicy: false
 }));
 
@@ -56,7 +45,7 @@ app.use(limiter);
 
 // CORS restritivo
 const allowedOrigins = process.env.NODE_ENV === 'production' 
-    ? ['https://web-app-pdf-sign-git-main-trae-ais-projects.vercel.app']
+    ? ['https://web-app-pdf-sign.vercel.app']
     : ['http://localhost:3000', 'http://127.0.0.1:3000'];
 
 app.use(cors({
