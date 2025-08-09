@@ -328,12 +328,19 @@ router.get('/:id/download', async (req, res) => {
 
         // Extrair o caminho do arquivo da URL do Firebase Storage
         // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
-        const urlMatch = fileUrl.match(/\/([^?]+)(?:\?|$)/);
-        if (!urlMatch) {
-            return res.status(400).json({ error: 'URL do arquivo inválida' });
+        const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
+        const bucketIndex = fileUrl.indexOf(bucketName);
+        
+        if (bucketIndex === -1) {
+            return res.status(400).json({ error: 'URL do arquivo inválida - bucket não encontrado' });
         }
         
-        const filePath = decodeURIComponent(urlMatch[1]);
+        // Extrair o caminho após o bucket
+        const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
+        const pathEndIndex = afterBucket.indexOf('?');
+        const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
+        const filePath = decodeURIComponent(rawPath);
+        
         console.log('Tentando acessar arquivo:', filePath);
         
         // Baixar arquivo do Firebase Storage
@@ -422,12 +429,19 @@ router.get('/:id/view', async (req, res) => {
 
         // Extrair o caminho do arquivo da URL do Firebase Storage
          // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
-         const urlMatch = fileUrl.match(/\/([^?]+)(?:\?|$)/);
-         if (!urlMatch) {
-             return res.status(400).json({ error: 'URL do arquivo inválida' });
+         const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
+         const bucketIndex = fileUrl.indexOf(bucketName);
+         
+         if (bucketIndex === -1) {
+             return res.status(400).json({ error: 'URL do arquivo inválida - bucket não encontrado' });
          }
          
-         const filePath = decodeURIComponent(urlMatch[1]);
+         // Extrair o caminho após o bucket
+         const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
+         const pathEndIndex = afterBucket.indexOf('?');
+         const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
+         const filePath = decodeURIComponent(rawPath);
+         
          console.log('Tentando visualizar arquivo:', filePath);
          
          // Gerar URL assinada temporária para visualização
@@ -479,9 +493,16 @@ router.post('/download-bulk', async (req, res) => {
                     if (fileUrl) {
                          // Extrair o caminho do arquivo da URL do Firebase Storage
                          // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
-                         const urlMatch = fileUrl.match(/\/([^?]+)(?:\?|$)/);
-                         if (urlMatch) {
-                             const filePath = decodeURIComponent(urlMatch[1]);
+                         const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
+                         const bucketIndex = fileUrl.indexOf(bucketName);
+                         
+                         if (bucketIndex !== -1) {
+                             // Extrair o caminho após o bucket
+                             const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
+                             const pathEndIndex = afterBucket.indexOf('?');
+                             const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
+                             const filePath = decodeURIComponent(rawPath);
+                             
                              console.log('Download em lote - tentando acessar arquivo:', filePath);
                              
                              // Baixar arquivo do Firebase Storage
