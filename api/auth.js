@@ -1,8 +1,11 @@
 const express = require('express');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const { body, validationResult } = require('express-validator');
+const validator = require('validator');
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getFirestore } = require('firebase-admin/firestore');
+require('dotenv').config();
 
 const router = express.Router();
 
@@ -23,14 +26,59 @@ if (!global.firebaseAdminInitialized) {
 
 const db = getFirestore();
 
-// Login de administrador
-router.post('/admin/login', async (req, res) => {
-    try {
-        const { email, password } = req.body;
+// Validação para login de administrador
+const adminLoginValidation = [
+    body('email')
+        .isEmail()
+        .normalizeEmail()
+        .withMessage('Email inválido'),
+    body('password')
+        .isLength({ min: 6 })
+        .withMessage('Senha deve ter pelo menos 6 caracteres')
+        .trim()
+        .escape()
+];
 
-        if (!email || !password) {
-            return res.status(400).json({ error: 'Email e senha são obrigatórios' });
+// Função para validar CPF
+function isValidCPF(cpf) {
+    cpf = cpf.replace(/\D/g, '');
+    
+    if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) {
+        return false;
+    }
+    
+    let sum = 0;
+    for (let i = 0; i < 9; i++) {
+        sum += parseInt(cpf.charAt(i)) * (10 - i);
+    }
+    let remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cpf.charAt(9))) return false;
+    
+    sum = 0;
+    for (let i = 0; i < 10; i++) {
+        sum += parseInt(cpf.charAt(i)) * (11 - i);
+    }
+    remainder = (sum * 10) % 11;
+    if (remainder === 10 || remainder === 11) remainder = 0;
+    if (remainder !== parseInt(cpf.charAt(10))) return false;
+    
+    return true;
+}
+
+// Login de administrador
+router.post('/admin/login', adminLoginValidation, async (req, res) => {
+    try {
+        // Verificar erros de validação
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ 
+                error: 'Dados inválidos', 
+                details: errors.array() 
+            });
         }
+
+        const { email, password } = req.body;
 
         // Buscar usuário admin no Firestore
         const usersRef = db.collection('users');
@@ -50,6 +98,13 @@ router.post('/admin/login', async (req, res) => {
             return res.status(401).json({ error: 'Credenciais inválidas' });
         }
 
+        // Verificar se JWT_SECRET está configurado
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            console.error('JWT_SECRET não configurado');
+            return res.status(500).json({ error: 'Erro de configuração do servidor' });
+        }
+
         // Gerar token JWT
         const token = jwt.sign(
             { 
@@ -57,7 +112,7 @@ router.post('/admin/login', async (req, res) => {
                 email: userData.email, 
                 role: 'admin' 
             },
-            process.env.JWT_SECRET || 'sua_chave_secreta',
+            jwtSecret,
             { expiresIn: '24h' }
         );
 
@@ -77,21 +132,38 @@ router.post('/admin/login', async (req, res) => {
     }
 });
 
-// Login de usuário por CPF
-router.post('/user/login', async (req, res) => {
-    try {
-        const { cpf } = req.body;
+// Validação para login de usuário
+const userLoginValidation = [
+    body('cpf')
+        .custom((value) => {
+            if (!value) {
+                throw new Error('CPF é obrigatório');
+            }
+            const cleanCPF = value.replace(/\D/g, '');
+            if (!isValidCPF(cleanCPF)) {
+                throw new Error('CPF inválido');
+            }
+            return true;
+        })
+        .trim()
+];
 
-        if (!cpf) {
-            return res.status(400).json({ error: 'CPF é obrigatório' });
+// Login de usuário por CPF
+router.post('/user/login', userLoginValidation, async (req, res) => {
+    try {
+        // Verificar erros de validação
+        const errors = validationResult(req);
+        if (!errors.isEmpty()) {
+            return res.status(400).json({ 
+                error: 'Dados inválidos', 
+                details: errors.array() 
+            });
         }
+
+        const { cpf } = req.body;
 
         // Limpar CPF (remover pontos e traços)
         const cleanCPF = cpf.replace(/\D/g, '');
-
-        if (cleanCPF.length !== 11) {
-            return res.status(400).json({ error: 'CPF inválido' });
-        }
 
         // Verificar se existem documentos para este CPF
         const documentsRef = db.collection('documents');
@@ -102,13 +174,20 @@ router.post('/user/login', async (req, res) => {
             return res.status(404).json({ error: 'Nenhum documento encontrado para este CPF' });
         }
 
+        // Verificar se JWT_SECRET está configurado
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            console.error('JWT_SECRET não configurado');
+            return res.status(500).json({ error: 'Erro de configuração do servidor' });
+        }
+
         // Gerar token JWT para usuário
         const token = jwt.sign(
             { 
                 cpf: cleanCPF, 
                 role: 'user' 
             },
-            process.env.JWT_SECRET || 'sua_chave_secreta',
+            jwtSecret,
             { expiresIn: '24h' }
         );
 
@@ -138,7 +217,12 @@ router.get('/verify', async (req, res) => {
             return res.status(401).json({ error: 'Token não fornecido' });
         }
 
-        const decoded = jwt.verify(token, process.env.JWT_SECRET || 'sua_chave_secreta');
+        const jwtSecret = process.env.JWT_SECRET;
+        if (!jwtSecret) {
+            return res.status(500).json({ error: 'Erro de configuração do servidor' });
+        }
+
+        const decoded = jwt.verify(token, jwtSecret);
         res.json({ success: true, user: decoded });
 
     } catch (error) {

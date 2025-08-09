@@ -25,10 +25,24 @@ api/serviceAccountKey.json
 # Logs
 logs
 *.log
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Arquivos de teste com credenciais
+test-*.html
+test-*.js
+**/test-*
+
+# Logs de aplicação
+app.log
+error.log
+access.log
 
 # Cache
 .cache/
 .parcel-cache/
+.tmp/
+temp/
 
 # Build
 build/

@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const multer = require('multer');
 const bcrypt = require('bcryptjs');
@@ -15,25 +17,64 @@ const uploadDocumentRoutes = require('./api/upload-document');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Middleware
+// Security middleware
+app.use(helmet({
+    contentSecurityPolicy: {
+        directives: {
+            defaultSrc: ["'self'"],
+            scriptSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net"],
+            imgSrc: ["'self'", "data:", "https:"],
+            connectSrc: ["'self'", "https://firestore.googleapis.com", "https://storage.googleapis.com"],
+            fontSrc: ["'self'", "https://cdn.jsdelivr.net"],
+            objectSrc: ["'none'"],
+            mediaSrc: ["'self'"],
+            frameSrc: ["'none'"]
+        }
+    },
+    crossOriginEmbedderPolicy: false
+}));
+
+// Rate limiting
+const limiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 100, // máximo 100 requests por IP
+    message: { error: 'Muitas tentativas. Tente novamente em 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 5, // máximo 5 tentativas de login por IP
+    message: { error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' },
+    standardHeaders: true,
+    legacyHeaders: false
+});
+
+app.use(limiter);
+
+// CORS restritivo
+const allowedOrigins = process.env.NODE_ENV === 'production' 
+    ? ['https://web-app-pdf-sign.vercel.app']
+    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+
 app.use(cors({
-    origin: process.env.NODE_ENV === 'production' 
-        ? ['https://web-app-pdf-sign.vercel.app', 'https://*.vercel.app']
-        : ['http://localhost:3000', 'http://192.168.1.243:3000', 'http://127.0.0.1:3000'],
+    origin: function (origin, callback) {
+        // Permitir requests sem origin (mobile apps, etc.)
+        if (!origin) return callback(null, true);
+        
+        if (allowedOrigins.indexOf(origin) !== -1) {
+            callback(null, true);
+        } else {
+            callback(new Error('Não permitido pelo CORS'));
+        }
+    },
     credentials: true,
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
 }));
 
-// Para Vercel, permitir todas as origens em produção
-if (process.env.VERCEL) {
-    app.use(cors({
-        origin: true,
-        credentials: true,
-        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'Origin', 'X-Requested-With']
-    }));
-}
 app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
 
@@ -58,20 +99,27 @@ const authenticateToken = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
 
-    console.log('Auth middleware - Headers:', req.headers);
-    console.log('Auth middleware - Token:', token ? 'Present' : 'Missing');
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('Auth middleware - Token:', token ? 'Present' : 'Missing');
+    }
 
     if (!token) {
-        console.log('Auth middleware - No token provided');
         return res.status(401).json({ error: 'Token de acesso necessário' });
     }
 
-    jwt.verify(token, process.env.JWT_SECRET || 'sua_chave_secreta', (err, user) => {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+        console.error('JWT_SECRET não configurado');
+        return res.status(500).json({ error: 'Erro de configuração do servidor' });
+    }
+
+    jwt.verify(token, jwtSecret, (err, user) => {
         if (err) {
-            console.log('Auth middleware - Token verification failed:', err.message);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Auth middleware - Token verification failed:', err.message);
+            }
             return res.status(403).json({ error: 'Token inválido' });
         }
-        console.log('Auth middleware - Token verified for user:', user);
         req.user = user;
         next();
     });
@@ -87,19 +135,26 @@ const authenticateTokenOptional = (req, res, next) => {
         token = req.query.token;
     }
 
-    console.log('Optional auth middleware - Token:', token ? 'Present' : 'Missing');
+    if (process.env.NODE_ENV !== 'production') {
+        console.log('Optional auth middleware - Token:', token ? 'Present' : 'Missing');
+    }
 
     if (!token) {
-        console.log('Optional auth middleware - No token provided, continuing without auth');
         return next();
     }
 
-    jwt.verify(token, process.env.JWT_SECRET || 'sua_chave_secreta', (err, user) => {
+    const jwtSecret = process.env.JWT_SECRET;
+    if (!jwtSecret) {
+        return next(); // Continue sem autenticação se JWT_SECRET não estiver configurado
+    }
+
+    jwt.verify(token, jwtSecret, (err, user) => {
         if (err) {
-            console.log('Optional auth middleware - Token verification failed:', err.message);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log('Optional auth middleware - Token verification failed:', err.message);
+            }
             return next(); // Continue sem autenticação em caso de erro
         }
-        console.log('Optional auth middleware - Token verified for user:', user);
         req.user = user;
         next();
     });
@@ -114,7 +169,7 @@ const requireAdmin = (req, res, next) => {
 };
 
 // Rotas da API
-app.use('/api/auth', authRoutes);
+app.use('/api/auth', authLimiter, authRoutes);
 
 // Middleware condicional para rotas de documentos
 app.use('/api/documents', (req, res, next) => {
