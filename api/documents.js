@@ -372,40 +372,7 @@ router.get('/:id/download', async (req, res) => {
     }
 });
 
-// Listar todos os documentos para o dashboard (apenas admin)
-router.get('/', async (req, res) => {
-    try {
-        if (req.user.role !== 'admin') {
-            return res.status(403).json({ error: 'Acesso negado' });
-        }
-
-        const documentsRef = db.collection('documents');
-        const querySnapshot = await documentsRef.orderBy('createdAt', 'desc').get();
-
-        const documents = [];
-        querySnapshot.forEach(doc => {
-            const data = doc.data();
-            documents.push({
-                id: doc.id,
-                filename: data.filename,
-                status: data.status,
-                createdAt: data.createdAt,
-                signedAt: data.signedAt || null,
-                signerEmail: data.signerEmail || null,
-                cpfAssociado: data.cpfAssociado || data.cpf,
-                nomeFuncionario: data.nomeFuncionario
-            });
-        });
-
-        res.json(documents);
-
-    } catch (error) {
-        console.error('Erro ao listar documentos:', error);
-        res.status(500).json({ error: 'Erro interno do servidor' });
-    }
-});
-
-// Visualizar documento (apenas admin)
+// Visualizar documento (apenas admin) - DEVE VIR ANTES DA ROTA GERAL
 router.get('/:id/view', async (req, res) => {
     try {
         // Verificar se o usuário está autenticado e é admin
@@ -460,6 +427,41 @@ router.get('/:id/view', async (req, res) => {
         res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
+
+// Listar todos os documentos para o dashboard (apenas admin)
+router.get('/', async (req, res) => {
+    try {
+        if (req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Acesso negado' });
+        }
+
+        const documentsRef = db.collection('documents');
+        const querySnapshot = await documentsRef.orderBy('createdAt', 'desc').get();
+
+        const documents = [];
+        querySnapshot.forEach(doc => {
+            const data = doc.data();
+            documents.push({
+                id: doc.id,
+                filename: data.filename,
+                status: data.status,
+                createdAt: data.createdAt,
+                signedAt: data.signedAt || null,
+                signerEmail: data.signerEmail || null,
+                cpfAssociado: data.cpfAssociado || data.cpf,
+                nomeFuncionario: data.nomeFuncionario
+            });
+        });
+
+        res.json(documents);
+
+    } catch (error) {
+        console.error('Erro ao listar documentos:', error);
+        res.status(500).json({ error: 'Erro interno do servidor' });
+    }
+});
+
+
 
 // Download em lote (apenas admin)
 router.post('/download-bulk', async (req, res) => {
