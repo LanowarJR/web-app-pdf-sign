@@ -77,6 +77,34 @@ const authenticateToken = (req, res, next) => {
     });
 };
 
+// Middleware de autenticação opcional (permite token via query parameter)
+const authenticateTokenOptional = (req, res, next) => {
+    const authHeader = req.headers['authorization'];
+    let token = authHeader && authHeader.split(' ')[1];
+    
+    // Se não há token no header, tentar query parameter
+    if (!token && req.query.token) {
+        token = req.query.token;
+    }
+
+    console.log('Optional auth middleware - Token:', token ? 'Present' : 'Missing');
+
+    if (!token) {
+        console.log('Optional auth middleware - No token provided, continuing without auth');
+        return next();
+    }
+
+    jwt.verify(token, process.env.JWT_SECRET || 'sua_chave_secreta', (err, user) => {
+        if (err) {
+            console.log('Optional auth middleware - Token verification failed:', err.message);
+            return next(); // Continue sem autenticação em caso de erro
+        }
+        console.log('Optional auth middleware - Token verified for user:', user);
+        req.user = user;
+        next();
+    });
+};
+
 // Middleware para verificar se é admin
 const requireAdmin = (req, res, next) => {
     if (req.user.role !== 'admin') {
@@ -87,6 +115,11 @@ const requireAdmin = (req, res, next) => {
 
 // Rotas da API
 app.use('/api/auth', authRoutes);
+
+// Rota especial para visualização de documentos (permite token via query parameter)
+app.use('/api/documents/:id/view', authenticateTokenOptional, documentRoutes);
+
+// Outras rotas de documentos (requerem autenticação via header)
 app.use('/api/documents', authenticateToken, documentRoutes);
 app.use('/api/signature', authenticateToken, signatureRoutes);
 app.use('/api/upload-document', authenticateToken, uploadDocumentRoutes);
