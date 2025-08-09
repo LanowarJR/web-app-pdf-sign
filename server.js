@@ -13,6 +13,7 @@ const authRoutes = require('./api/auth');
 const documentRoutes = require('./api/documents');
 const signatureRoutes = require('./api/signature');
 const uploadDocumentRoutes = require('./api/upload-document');
+const debugRoutes = require('./api/debug');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -159,6 +160,7 @@ const requireAdmin = (req, res, next) => {
 
 // Rotas da API
 app.use('/api/auth', authLimiter, authRoutes);
+app.use('/api/debug', debugRoutes);
 
 // Middleware condicional para rotas de documentos
 app.use('/api/documents', (req, res, next) => {

@@ -30,13 +30,11 @@ const db = getFirestore();
 const adminLoginValidation = [
     body('email')
         .isEmail()
-        .normalizeEmail()
         .withMessage('Email inválido'),
     body('password')
         .isLength({ min: 6 })
         .withMessage('Senha deve ter pelo menos 6 caracteres')
         .trim()
-        .escape()
 ];
 
 // Função para validar CPF
