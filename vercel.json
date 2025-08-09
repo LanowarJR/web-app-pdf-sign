@@ -40,6 +40,10 @@
       "dest": "/public/sign-pdfjs.html"
     },
     {
+      "src": "/test-vercel-api.html",
+      "dest": "/test-vercel-api.html"
+    },
+    {
       "src": "/admin",
       "dest": "/public/admin-pdfjs.html"
     },
