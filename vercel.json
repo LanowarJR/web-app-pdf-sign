@@ -54,6 +54,10 @@
     {
       "src": "/sign",
       "dest": "/public/sign-pdfjs.html"
+    },
+    {
+      "src": "/sign-pdfjs",
+      "dest": "/public/sign-pdfjs.html"
     }
   ]
 }
