@@ -577,10 +577,12 @@
             if (selectedDocuments.size === 0) return;
             
             try {
+                const token = localStorage.getItem('token');
                 const response = await fetch('/api/documents/download-bulk', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json'
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({ documentIds: Array.from(selectedDocuments) })
                 });
@@ -639,7 +641,12 @@
         // Baixar documento individual
         async function downloadDocument(docId) {
             try {
-                const response = await fetch(`/api/documents/${docId}/download`);
+                const token = localStorage.getItem('token');
+                const response = await fetch(`/api/documents/${docId}/download`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
                 if (!response.ok) {
                     throw new Error('Erro ao baixar documento');
                 }
