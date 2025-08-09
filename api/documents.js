@@ -319,13 +319,18 @@ router.get('/:id/download', async (req, res) => {
 
         const documentData = docSnap.data();
 
-        // Para documentos assinados, usar signedPath; para pendentes, usar originalPath
-        const filePath = documentData.status === 'signed' ? documentData.signedPath : documentData.originalPath;
+        // Para documentos assinados, usar signedUrl; para pendentes, usar originalUrl
+        const fileUrl = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
         
-        if (!filePath) {
-            return res.status(400).json({ error: 'Caminho do arquivo não encontrado' });
+        if (!fileUrl) {
+            return res.status(400).json({ error: 'URL do arquivo não encontrada' });
         }
 
+        // Extrair o caminho do arquivo da URL do Firebase Storage
+        const urlParts = fileUrl.split('/');
+        const encodedPath = urlParts[urlParts.length - 1].split('?')[0];
+        const filePath = decodeURIComponent(encodedPath);
+        
         // Baixar arquivo do Firebase Storage
         const file = bucket.file(filePath);
         const [exists] = await file.exists();
@@ -404,12 +409,17 @@ router.get('/:id/view', async (req, res) => {
         }
 
         const documentData = docSnap.data();
-        const filePath = documentData.status === 'signed' ? documentData.signedPath : documentData.originalPath;
+        const fileUrl = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
 
-        if (!filePath) {
-            return res.status(400).json({ error: 'Caminho do arquivo não encontrado' });
+        if (!fileUrl) {
+            return res.status(400).json({ error: 'URL do arquivo não encontrada' });
         }
 
+        // Extrair o caminho do arquivo da URL do Firebase Storage
+        const urlParts = fileUrl.split('/');
+        const encodedPath = urlParts[urlParts.length - 1].split('?')[0];
+        const filePath = decodeURIComponent(encodedPath);
+        
         // Gerar URL assinada temporária para visualização
         const file = bucket.file(filePath);
         const [url] = await file.getSignedUrl({
@@ -454,9 +464,14 @@ router.post('/download-bulk', async (req, res) => {
 
                 if (docSnap.exists) {
                     const documentData = docSnap.data();
-                    const filePath = documentData.status === 'signed' ? documentData.signedPath : documentData.originalPath;
+                    const fileUrl = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
 
-                    if (filePath) {
+                    if (fileUrl) {
+                        // Extrair o caminho do arquivo da URL do Firebase Storage
+                        const urlParts = fileUrl.split('/');
+                        const encodedPath = urlParts[urlParts.length - 1].split('?')[0];
+                        const filePath = decodeURIComponent(encodedPath);
+                        
                         // Baixar arquivo do Firebase Storage
                         const file = bucket.file(filePath);
                         const [exists] = await file.exists();
