@@ -41,7 +41,7 @@
     },
     {
       "src": "/test-vercel-api.html",
-      "dest": "/test-vercel-api.html"
+      "dest": "/public/test-vercel-api.html"
     },
     {
       "src": "/admin",
