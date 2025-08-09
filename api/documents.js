@@ -389,8 +389,8 @@ router.get('/', async (req, res) => {
                 id: doc.id,
                 filename: data.filename,
                 status: data.status,
-                uploadDate: data.createdAt,
-                signedDate: data.signedAt || null,
+                createdAt: data.createdAt,
+                signedAt: data.signedAt || null,
                 signerEmail: data.signerEmail || null,
                 cpfAssociado: data.cpfAssociado || data.cpf,
                 nomeFuncionario: data.nomeFuncionario
@@ -408,7 +408,20 @@ router.get('/', async (req, res) => {
 // Visualizar documento (apenas admin)
 router.get('/:id/view', async (req, res) => {
     try {
-        if (req.user.role !== 'admin') {
+        // Verificar autenticação via header ou query parameter
+        let user = req.user;
+        
+        // Se não há usuário autenticado via middleware, tentar token da query
+        if (!user && req.query.token) {
+            try {
+                const jwt = require('jsonwebtoken');
+                user = jwt.verify(req.query.token, process.env.JWT_SECRET || 'sua_chave_secreta');
+            } catch (err) {
+                return res.status(401).json({ error: 'Token inválido' });
+            }
+        }
+        
+        if (!user || user.role !== 'admin') {
             return res.status(403).json({ error: 'Acesso negado' });
         }
 
