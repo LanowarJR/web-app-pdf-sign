@@ -680,12 +680,12 @@
             try {
                 console.log('Tentando carregar PDF da URL:', url);
                 
-                // Para dispositivos móveis, usar proxy local para evitar problemas de CORS
+                // Sempre usar proxy local para evitar problemas de CORS
                 let finalUrl = url;
-                if (isMobile && url.includes('storage.googleapis.com')) {
+                if (url.includes('storage.googleapis.com')) {
                     // Usar endpoint local como proxy
                     finalUrl = `/api/proxy-pdf?url=${encodeURIComponent(url)}`;
-                    console.log('Usando proxy local para mobile:', finalUrl);
+                    console.log('Usando proxy local:', finalUrl);
                 }
                 
                 // Configurações específicas para mobile e CORS
