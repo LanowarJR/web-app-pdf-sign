@@ -323,17 +323,35 @@ router.get('/:id/download', async (req, res) => {
             return res.status(400).json({ error: 'Documento ainda não foi assinado' });
         }
 
-        if (!documentData.signedUrl) {
-            return res.status(400).json({ error: 'URL do documento assinado não encontrada' });
+        if (!documentData.signedPath) {
+            return res.status(400).json({ error: 'Caminho do documento assinado não encontrado' });
         }
 
-        res.json({
-            success: true,
-            downloadUrl: documentData.signedUrl
+        // Baixar arquivo do Firebase Storage
+        const file = bucket.file(documentData.signedPath);
+        const [exists] = await file.exists();
+        
+        if (!exists) {
+            return res.status(404).json({ error: 'Arquivo não encontrado no storage' });
+        }
+
+        // Configurar headers para download
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename="${documentData.filename}"`);
+        
+        // Stream do arquivo
+        const stream = file.createReadStream();
+        stream.pipe(res);
+        
+        stream.on('error', (error) => {
+            console.error('Erro ao fazer stream do arquivo:', error);
+            if (!res.headersSent) {
+                res.status(500).json({ error: 'Erro ao baixar arquivo' });
+            }
         });
 
     } catch (error) {
-        console.error('Erro ao obter URL de download:', error);
+        console.error('Erro ao baixar documento:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
@@ -430,29 +448,20 @@ router.post('/download-bulk', async (req, res) => {
 
                 if (docSnap.exists) {
                     const documentData = docSnap.data();
-                    const url = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
+                    const filePath = documentData.status === 'signed' ? documentData.signedPath : documentData.originalPath;
 
-                    if (url) {
-                        // Fazer download do arquivo
-                        const https = require('https');
-                        const http = require('http');
-                        const client = url.startsWith('https') ? https : http;
-
-                        await new Promise((resolve, reject) => {
-                            client.get(url, (response) => {
-                                if (response.statusCode === 200) {
-                                    archive.append(response, { name: documentData.filename });
-                                    addedFiles++;
-                                    resolve();
-                                } else {
-                                    console.error(`Erro ao baixar ${documentData.filename}: ${response.statusCode}`);
-                                    resolve(); // Continue mesmo com erro
-                                }
-                            }).on('error', (err) => {
-                                console.error(`Erro ao baixar ${documentData.filename}:`, err);
-                                resolve(); // Continue mesmo com erro
-                            });
-                        });
+                    if (filePath) {
+                        // Baixar arquivo do Firebase Storage
+                        const file = bucket.file(filePath);
+                        const [exists] = await file.exists();
+                        
+                        if (exists) {
+                            const stream = file.createReadStream();
+                            archive.append(stream, { name: documentData.filename });
+                            addedFiles++;
+                        } else {
+                            console.error(`Arquivo não encontrado no storage: ${filePath}`);
+                        }
                     }
                 }
             } catch (error) {
