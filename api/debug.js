@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const debugLoginRoutes = require('./debug-login');
 
 // Rota de debug para verificar variáveis de ambiente no Vercel
 router.get('/env-check', (req, res) => {
@@ -140,6 +139,4 @@ router.get('/admin-check', async (req, res) => {
 });
 
 // Incluir rotas de debug de login
-router.use('/', debugLoginRoutes);
-
 module.exports = router;
