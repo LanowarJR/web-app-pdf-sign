@@ -319,16 +319,15 @@ router.get('/:id/download', async (req, res) => {
 
         const documentData = docSnap.data();
 
-        if (documentData.status !== 'signed') {
-            return res.status(400).json({ error: 'Documento ainda não foi assinado' });
-        }
-
-        if (!documentData.signedPath) {
-            return res.status(400).json({ error: 'Caminho do documento assinado não encontrado' });
+        // Para documentos assinados, usar signedPath; para pendentes, usar originalPath
+        const filePath = documentData.status === 'signed' ? documentData.signedPath : documentData.originalPath;
+        
+        if (!filePath) {
+            return res.status(400).json({ error: 'Caminho do arquivo não encontrado' });
         }
 
         // Baixar arquivo do Firebase Storage
-        const file = bucket.file(documentData.signedPath);
+        const file = bucket.file(filePath);
         const [exists] = await file.exists();
         
         if (!exists) {
@@ -405,11 +404,18 @@ router.get('/:id/view', async (req, res) => {
         }
 
         const documentData = docSnap.data();
-        const url = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
+        const filePath = documentData.status === 'signed' ? documentData.signedPath : documentData.originalPath;
 
-        if (!url) {
-            return res.status(400).json({ error: 'URL do documento não encontrada' });
+        if (!filePath) {
+            return res.status(400).json({ error: 'Caminho do arquivo não encontrado' });
         }
+
+        // Gerar URL assinada temporária para visualização
+        const file = bucket.file(filePath);
+        const [url] = await file.getSignedUrl({
+            action: 'read',
+            expires: Date.now() + 15 * 60 * 1000, // 15 minutos
+        });
 
         // Redirecionar para o arquivo
         res.redirect(url);
