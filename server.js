@@ -209,6 +209,10 @@ app.get('/sign-pdfjs', (req, res) => {
     res.sendFile(path.join(__dirname, 'public', 'sign-pdfjs.html'));
 });
 
+app.get('/login.html', (req, res) => {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
 // Tratamento de erros
 app.use((error, req, res, next) => {
     console.error(error.stack);
