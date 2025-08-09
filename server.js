@@ -116,14 +116,15 @@ const requireAdmin = (req, res, next) => {
 // Rotas da API
 app.use('/api/auth', authRoutes);
 
-// Rota específica para visualização de documentos (deve vir ANTES da rota geral)
-app.get('/api/documents/:id/view', authenticateTokenOptional, (req, res, next) => {
-    // Redirecionar para o router de documentos
-    documentRoutes(req, res, next);
-});
-
-// Outras rotas de documentos (requerem autenticação via header)
-app.use('/api/documents', authenticateToken, documentRoutes);
+// Middleware condicional para rotas de documentos
+app.use('/api/documents', (req, res, next) => {
+    // Se for a rota de visualização, usar middleware opcional
+    if (req.path.includes('/view')) {
+        return authenticateTokenOptional(req, res, next);
+    }
+    // Para outras rotas, usar middleware obrigatório
+    return authenticateToken(req, res, next);
+}, documentRoutes);
 app.use('/api/signature', authenticateToken, signatureRoutes);
 app.use('/api/upload-document', authenticateToken, uploadDocumentRoutes);
 
