@@ -47,7 +47,17 @@ app.use(limiter);
 // CORS restritivo
 const allowedOrigins = process.env.NODE_ENV === 'production' 
     ? ['https://web-app-pdf-sign.vercel.app']
-    : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+    : [
+        'http://localhost:3000', 
+        'http://127.0.0.1:3000',
+        'http://localhost:8000',
+        'http://127.0.0.1:8000',
+        'http://localhost:5000',
+        'http://127.0.0.1:5000',
+        'http://192.168.31.239:3000',
+        'http://192.168.31.239:8000',
+        'http://192.168.31.239:5000'
+    ];
 
 app.use(cors({
     origin: function (origin, callback) {

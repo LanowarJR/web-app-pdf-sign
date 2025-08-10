@@ -134,6 +134,81 @@
             font-size: 14px;
         }
 
+        .filename-container {
+            position: relative;
+            overflow: hidden;
+            white-space: nowrap;
+            max-width: 100%;
+            background: linear-gradient(90deg, #f8f9fa 0%, #f8f9fa 85%, rgba(248,249,250,0.3) 100%);
+            padding: 8px 12px;
+            border-radius: 5px;
+            margin: 5px 0;
+            border: 1px solid #e0e0e0;
+            cursor: pointer;
+        }
+
+        .filename-container:not(.short-filename)::after {
+            content: '→';
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+            font-size: 12px;
+            opacity: 0.7;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 0.7; }
+            50% { opacity: 0.3; }
+        }
+
+        .filename-text {
+            display: inline-block;
+            white-space: nowrap;
+            transition: transform 0.3s ease;
+        }
+
+        .filename-text:not(.short-text) {
+            animation: scroll-filename 4s ease-in-out infinite;
+            animation-play-state: running;
+        }
+
+        .filename-container:hover .filename-text:not(.short-text) {
+            animation-duration: 2s;
+        }
+
+        /* Animação automática e mais rápida */
+        @keyframes scroll-filename {
+            0% {
+                transform: translateX(0);
+            }
+            25% {
+                transform: translateX(0);
+            }
+            75% {
+                transform: translateX(calc(-100% + 220px));
+            }
+            100% {
+                transform: translateX(calc(-100% + 220px));
+            }
+        }
+
+        /* Para textos que cabem no container, não animar */
+        .filename-text.short-text {
+            animation: none !important;
+        }
+
+        .date-info {
+            background: #e3f2fd;
+            padding: 6px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            color: #1565c0;
+            margin: 5px 0;
+        }
+
         .document-actions {
             margin-top: 20px;
             display: flex;
@@ -353,33 +428,101 @@
                 return;
             }
 
-            grid.innerHTML = documents.map(doc => `
-                <div class="document-card">
-                    <div class="document-status status-${doc.status}">
-                        ${doc.status === 'pending' ? '⏳ Pendente' : '✅ Assinado'}
-                    </div>
+            grid.innerHTML = documents.map(doc => {
+                // Função para formatar data de forma mais robusta
+                const formatDate = (dateField) => {
+                    if (!dateField) return null;
                     
-                    <div class="document-info">
-                        <h3>${doc.nomeFuncionario}</h3>
-                        <p><strong>Arquivo:</strong> ${doc.filename}</p>
-                        <p><strong>Data de envio:</strong> ${doc.createdAt ? new Date(doc.createdAt.seconds * 1000).toLocaleDateString() : 'N/A'}</p>
-                        ${doc.signedAt ? `<p><strong>Assinado em:</strong> ${new Date(doc.signedAt.seconds * 1000).toLocaleDateString()}</p>` : ''}
-                        ${doc.signaturePositions && doc.signaturePositions.length > 0 ? 
-                            `<p><strong>Campos de assinatura:</strong> ${doc.signaturePositions.length}</p>` : ''}
-                    </div>
+                    let date;
+                    if (dateField.seconds) {
+                        // Timestamp do Firebase
+                        date = new Date(dateField.seconds * 1000);
+                    } else if (dateField._seconds) {
+                        // Formato alternativo do Firebase
+                        date = new Date(dateField._seconds * 1000);
+                    } else {
+                        // String de data normal
+                        date = new Date(dateField);
+                    }
                     
-                    <div class="document-actions">
-                        ${doc.status === 'pending' ? 
-                            `<button class="btn btn-primary" onclick="signDocument('${doc.id}')">
-                                ✍️ Assinar Documento
-                            </button>` :
-                            `<button class="btn btn-success" onclick="viewSignedDocument('${doc.id}')">
-                                👁️ Visualizar Assinado
-                            </button>`
+                    if (isNaN(date.getTime())) {
+                        return 'Data inválida';
+                    }
+                    
+                    return date.toLocaleString('pt-BR', {
+                        day: '2-digit',
+                        month: '2-digit', 
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    });
+                };
+                
+                const createdDate = formatDate(doc.createdAt) || 'Data não disponível';
+                const signedDate = formatDate(doc.signedAt);
+
+                return `
+                    <div class="document-card">
+                        <div class="document-status status-${doc.status}">
+                            ${doc.status === 'pending' ? '⏳ Pendente' : '✅ Assinado'}
+                        </div>
+                        
+                        <div class="document-info">
+                            <h3>${doc.nomeFuncionario}</h3>
+                            
+                            <p><strong>📄 Arquivo:</strong></p>
+                             <div class="filename-container" id="filename-container-${doc.id}">
+                                 <span class="filename-text" id="filename-text-${doc.id}">${doc.filename}</span>
+                             </div>
+                            
+                            <div class="date-info">
+                                <strong>📅 Enviado em:</strong> ${createdDate}
+                            </div>
+                            
+                            ${signedDate ? `
+                                <div class="date-info" style="background: #e8f5e8; color: #2e7d32;">
+                                    <strong>✅ Assinado em:</strong> ${signedDate}
+                                </div>
+                            ` : ''}
+                            
+                            ${doc.signaturePositions && doc.signaturePositions.length > 0 ? 
+                                `<p><strong>✍️ Campos de assinatura:</strong> ${doc.signaturePositions.length}</p>` : ''}
+                        </div>
+                        
+                        <div class="document-actions">
+                            ${doc.status === 'pending' ? 
+                                `<button class="btn btn-primary" onclick="signDocument('${doc.id}')">
+                                    ✍️ Assinar Documento
+                                </button>` :
+                                `<button class="btn btn-success" onclick="viewSignedDocument('${doc.id}')">
+                                    👁️ Visualizar Assinado
+                                </button>`
+                            }
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            // Aplicar animação e indicadores visuais para textos longos
+            setTimeout(() => {
+                documents.forEach(doc => {
+                    const container = document.getElementById(`filename-container-${doc.id}`);
+                    const textElement = document.getElementById(`filename-text-${doc.id}`);
+                    
+                    if (container && textElement) {
+                        const containerWidth = container.offsetWidth - 24; // Subtraindo padding
+                        const textWidth = textElement.scrollWidth;
+                        
+                        if (textWidth <= containerWidth) {
+                            textElement.classList.add('short-text');
+                            container.classList.add('short-filename');
+                        } else {
+                            // Adicionar título para indicar que é clicável
+                            container.title = 'Nome completo: ' + doc.filename;
                         }
-                    </div>
-                </div>
-            `).join('');
+                    }
+                });
+            }, 100);
         }
 
         function signDocument(documentId) {
