@@ -1,15 +1,12 @@
 const express = require('express');
-const { getFirestore } = require('firebase-admin/firestore');
-const { getStorage } = require('firebase-admin/storage');
 const multer = require('multer');
 
 const router = express.Router();
-const db = getFirestore();
-const bucket = getStorage().bucket();
+const { db, bucket } = require('../firebase-config');
 
 // Configuração do multer para upload de arquivos
 const storage = multer.memoryStorage();
-const upload = multer({ 
+const upload = multer({
     storage: storage,
     limits: {
         fileSize: 10 * 1024 * 1024 // 10MB
@@ -24,7 +21,7 @@ const upload = multer({
 });
 
 // Configuração para múltiplos arquivos
-const uploadMultiple = multer({ 
+const uploadMultiple = multer({
     storage: storage,
     limits: {
         fileSize: 10 * 1024 * 1024, // 10MB por arquivo
@@ -59,7 +56,7 @@ router.get('/user', async (req, res) => {
                 ...doc.data()
             });
         });
-        
+
         res.json({
             success: true,
             documents
@@ -151,10 +148,10 @@ router.post('/upload', upload.single('pdf'), async (req, res) => {
         // Validar nome do arquivo
         const filenameRegex = /^(.+)_(\d{11})\.pdf$/;
         const match = originalname.match(filenameRegex);
-        
+
         if (!match) {
-            return res.status(400).json({ 
-                error: 'Nome do arquivo deve seguir o formato: nome_funcionario_cpf.pdf' 
+            return res.status(400).json({
+                error: 'Nome do arquivo deve seguir o formato: nome_funcionario_cpf.pdf'
             });
         }
 
@@ -223,12 +220,12 @@ router.post('/upload-bulk', uploadMultiple.array('pdfs'), async (req, res) => {
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
             const { originalname: filename, buffer } = file;
-            
+
             try {
                 // Validar formato do nome do arquivo
                 const filenameRegex = /^(.+)_(\d{11})\.pdf$/;
                 const match = filename.match(filenameRegex);
-                
+
                 if (!match) {
                     errors.push({
                         filename: filename,
@@ -321,7 +318,7 @@ router.get('/:id/download', async (req, res) => {
 
         // Para documentos assinados, usar signedUrl; para pendentes, usar originalUrl
         const fileUrl = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
-        
+
         if (!fileUrl) {
             return res.status(400).json({ error: 'URL do arquivo não encontrada' });
         }
@@ -330,23 +327,23 @@ router.get('/:id/download', async (req, res) => {
         // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
         const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
         const bucketIndex = fileUrl.indexOf(bucketName);
-        
+
         if (bucketIndex === -1) {
             return res.status(400).json({ error: 'URL do arquivo inválida - bucket não encontrado' });
         }
-        
+
         // Extrair o caminho após o bucket
         const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
         const pathEndIndex = afterBucket.indexOf('?');
         const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
         const filePath = decodeURIComponent(rawPath);
-        
+
         console.log('Tentando acessar arquivo:', filePath);
-        
+
         // Baixar arquivo do Firebase Storage
         const file = bucket.file(filePath);
         const [exists] = await file.exists();
-        
+
         if (!exists) {
             return res.status(404).json({ error: 'Arquivo não encontrado no storage' });
         }
@@ -354,11 +351,11 @@ router.get('/:id/download', async (req, res) => {
         // Configurar headers para download
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', `attachment; filename="${documentData.filename}"`);
-        
+
         // Stream do arquivo
         const stream = file.createReadStream();
         stream.pipe(res);
-        
+
         stream.on('error', (error) => {
             console.error('Erro ao fazer stream do arquivo:', error);
             if (!res.headersSent) {
@@ -396,24 +393,24 @@ router.get('/:id/view', async (req, res) => {
         }
 
         // Extrair o caminho do arquivo da URL do Firebase Storage
-         // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
-         const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
-         const bucketIndex = fileUrl.indexOf(bucketName);
-         
-         if (bucketIndex === -1) {
-             return res.status(400).json({ error: 'URL do arquivo inválida - bucket não encontrado' });
-         }
-         
-         // Extrair o caminho após o bucket
-         const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
-         const pathEndIndex = afterBucket.indexOf('?');
-         const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
-         const filePath = decodeURIComponent(rawPath);
-         
-         console.log('Tentando visualizar arquivo:', filePath);
-         
-         // Gerar URL assinada temporária para visualização
-         const file = bucket.file(filePath);
+        // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
+        const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
+        const bucketIndex = fileUrl.indexOf(bucketName);
+
+        if (bucketIndex === -1) {
+            return res.status(400).json({ error: 'URL do arquivo inválida - bucket não encontrado' });
+        }
+
+        // Extrair o caminho após o bucket
+        const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
+        const pathEndIndex = afterBucket.indexOf('?');
+        const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
+        const filePath = decodeURIComponent(rawPath);
+
+        console.log('Tentando visualizar arquivo:', filePath);
+
+        // Gerar URL assinada temporária para visualização
+        const file = bucket.file(filePath);
         const [url] = await file.getSignedUrl({
             action: 'read',
             expires: Date.now() + 15 * 60 * 1000, // 15 minutos
@@ -494,33 +491,33 @@ router.post('/download-bulk', async (req, res) => {
                     const fileUrl = documentData.status === 'signed' ? documentData.signedUrl : documentData.originalUrl;
 
                     if (fileUrl) {
-                         // Extrair o caminho do arquivo da URL do Firebase Storage
-                         // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
-                         const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
-                         const bucketIndex = fileUrl.indexOf(bucketName);
-                         
-                         if (bucketIndex !== -1) {
-                             // Extrair o caminho após o bucket
-                             const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
-                             const pathEndIndex = afterBucket.indexOf('?');
-                             const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
-                             const filePath = decodeURIComponent(rawPath);
-                             
-                             console.log('Download em lote - tentando acessar arquivo:', filePath);
-                             
-                             // Baixar arquivo do Firebase Storage
-                             const file = bucket.file(filePath);
-                             const [exists] = await file.exists();
-                             
-                             if (exists) {
-                                 const stream = file.createReadStream();
-                                 archive.append(stream, { name: documentData.filename });
-                                 addedFiles++;
-                             } else {
-                                 console.error(`Arquivo não encontrado no storage: ${filePath}`);
-                             }
-                         }
-                     }
+                        // Extrair o caminho do arquivo da URL do Firebase Storage
+                        // URL format: https://storage.googleapis.com/bucket-name/path/to/file.pdf?params
+                        const bucketName = process.env.FIREBASE_STORAGE_BUCKET.replace('.appspot.com', '.firebasestorage.app');
+                        const bucketIndex = fileUrl.indexOf(bucketName);
+
+                        if (bucketIndex !== -1) {
+                            // Extrair o caminho após o bucket
+                            const afterBucket = fileUrl.substring(bucketIndex + bucketName.length + 1); // +1 para pular a '/'
+                            const pathEndIndex = afterBucket.indexOf('?');
+                            const rawPath = pathEndIndex !== -1 ? afterBucket.substring(0, pathEndIndex) : afterBucket;
+                            const filePath = decodeURIComponent(rawPath);
+
+                            console.log('Download em lote - tentando acessar arquivo:', filePath);
+
+                            // Baixar arquivo do Firebase Storage
+                            const file = bucket.file(filePath);
+                            const [exists] = await file.exists();
+
+                            if (exists) {
+                                const stream = file.createReadStream();
+                                archive.append(stream, { name: documentData.filename });
+                                addedFiles++;
+                            } else {
+                                console.error(`Arquivo não encontrado no storage: ${filePath}`);
+                            }
+                        }
+                    }
                 }
             } catch (error) {
                 console.error(`Erro ao processar documento ${docId}:`, error);
@@ -563,10 +560,10 @@ router.delete('/delete-bulk', async (req, res) => {
 
                 if (docSnap.exists) {
                     const documentData = docSnap.data();
-                    
+
                     // Excluir do Firestore
                     batch.delete(docRef);
-                    
+
                     // Marcar arquivos para exclusão do Storage
                     if (documentData.filename) {
                         deletedFiles.push(`documents/${documentData.filename}`);
@@ -593,9 +590,9 @@ router.delete('/delete-bulk', async (req, res) => {
             }
         }
 
-        res.json({ 
-            success: true, 
-            message: `${documentIds.length} documento(s) excluído(s) com sucesso` 
+        res.json({
+            success: true,
+            message: `${documentIds.length} documento(s) excluído(s) com sucesso`
         });
 
     } catch (error) {
@@ -637,9 +634,9 @@ router.delete('/:id', async (req, res) => {
             // Continue mesmo com erro no Storage
         }
 
-        res.json({ 
-            success: true, 
-            message: 'Documento excluído com sucesso' 
+        res.json({
+            success: true,
+            message: 'Documento excluído com sucesso'
         });
 
     } catch (error) {

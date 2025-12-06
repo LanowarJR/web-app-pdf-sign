@@ -3,28 +3,9 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const validator = require('validator');
-const { initializeApp, cert } = require('firebase-admin/app');
-const { getFirestore } = require('firebase-admin/firestore');
-require('dotenv').config();
 
 const router = express.Router();
-
-// Inicializar Firebase Admin
-if (!global.firebaseAdminInitialized) {
-    try {
-        const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT_KEY);
-        initializeApp({
-            credential: cert(serviceAccount),
-            storageBucket: process.env.FIREBASE_STORAGE_BUCKET
-        });
-        global.firebaseAdminInitialized = true;
-        console.log('Firebase Admin SDK inicializado em auth.js');
-    } catch (e) {
-        console.error('Erro ao inicializar Firebase Admin SDK:', e);
-    }
-}
-
-const db = getFirestore();
+const { db } = require('../firebase-config');
 
 // Validação para login de administrador
 const adminLoginValidation = [
@@ -40,11 +21,11 @@ const adminLoginValidation = [
 // Função para validar CPF
 function isValidCPF(cpf) {
     cpf = cpf.replace(/\D/g, '');
-    
+
     if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) {
         return false;
     }
-    
+
     let sum = 0;
     for (let i = 0; i < 9; i++) {
         sum += parseInt(cpf.charAt(i)) * (10 - i);
@@ -52,7 +33,7 @@ function isValidCPF(cpf) {
     let remainder = (sum * 10) % 11;
     if (remainder === 10 || remainder === 11) remainder = 0;
     if (remainder !== parseInt(cpf.charAt(9))) return false;
-    
+
     sum = 0;
     for (let i = 0; i < 10; i++) {
         sum += parseInt(cpf.charAt(i)) * (11 - i);
@@ -60,7 +41,7 @@ function isValidCPF(cpf) {
     remainder = (sum * 10) % 11;
     if (remainder === 10 || remainder === 11) remainder = 0;
     if (remainder !== parseInt(cpf.charAt(10))) return false;
-    
+
     return true;
 }
 
@@ -70,9 +51,9 @@ router.post('/admin/login', adminLoginValidation, async (req, res) => {
         // Verificar erros de validação
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ 
-                error: 'Dados inválidos', 
-                details: errors.array() 
+            return res.status(400).json({
+                error: 'Dados inválidos',
+                details: errors.array()
             });
         }
 
@@ -105,10 +86,10 @@ router.post('/admin/login', adminLoginValidation, async (req, res) => {
 
         // Gerar token JWT
         const token = jwt.sign(
-            { 
-                userId: userDoc.id, 
-                email: userData.email, 
-                role: 'admin' 
+            {
+                userId: userDoc.id,
+                email: userData.email,
+                role: 'admin'
             },
             jwtSecret,
             { expiresIn: '24h' }
@@ -152,9 +133,9 @@ router.post('/user/login', userLoginValidation, async (req, res) => {
         // Verificar erros de validação
         const errors = validationResult(req);
         if (!errors.isEmpty()) {
-            return res.status(400).json({ 
-                error: 'Dados inválidos', 
-                details: errors.array() 
+            return res.status(400).json({
+                error: 'Dados inválidos',
+                details: errors.array()
             });
         }
 
@@ -181,9 +162,9 @@ router.post('/user/login', userLoginValidation, async (req, res) => {
 
         // Gerar token JWT para usuário
         const token = jwt.sign(
-            { 
-                cpf: cleanCPF, 
-                role: 'user' 
+            {
+                cpf: cleanCPF,
+                role: 'user'
             },
             jwtSecret,
             { expiresIn: '24h' }
